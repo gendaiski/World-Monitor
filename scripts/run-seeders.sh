@@ -52,6 +52,20 @@ if [ -f "$OVERRIDE" ]; then
   . "$_env_tmp"
   rm -f "$_env_tmp"
 fi
+# AI Port: when AI_PORT_TOKEN is set (install-worldmonitor.sh writes it to
+# .env), host-side seeders reach every connected AI through the port the
+# compose stack publishes on localhost. Explicit values in .env still win.
+if [ -n "${AI_PORT_TOKEN:-}" ]; then
+  AI_PORT_URL="${AI_PORT_URL:-http://localhost:${AI_PORT_PORT:-8787}}"
+  OLLAMA_API_URL="${OLLAMA_API_URL:-$AI_PORT_URL}"
+  OLLAMA_API_KEY="${OLLAMA_API_KEY:-$AI_PORT_TOKEN}"
+  OLLAMA_MODEL="${OLLAMA_MODEL:-${AI_PORT_MODEL:-auto}}"
+  LLM_API_URL="${LLM_API_URL:-$AI_PORT_URL/v1/chat/completions}"
+  LLM_API_KEY="${LLM_API_KEY:-$AI_PORT_TOKEN}"
+  LLM_MODEL="${LLM_MODEL:-${AI_PORT_MODEL:-auto}}"
+  export AI_PORT_TOKEN AI_PORT_URL OLLAMA_API_URL OLLAMA_API_KEY OLLAMA_MODEL LLM_API_URL LLM_API_KEY LLM_MODEL
+fi
+
 # Per-seeder wall-clock cap for STANDALONE seeders. They run sequentially, so a
 # single upstream that hangs (e.g. a slow NOAA/NSIDC fetch that doesn't honour its
 # own AbortSignal and keeps the node process alive for an hour) would burn the rest

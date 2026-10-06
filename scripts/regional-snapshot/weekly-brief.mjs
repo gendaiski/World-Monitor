@@ -14,6 +14,7 @@
 
 import { extractFirstJsonObject, cleanJsonText } from '../_llm-json.mjs';
 import { buildLlmCallEvent, emitLlmEvents } from '../lib/llm-telemetry.cjs';
+import { aiPortChainEntry } from '../lib/ai-port-provider.mjs';
 import {
   OPENROUTER_FREE_BACKUP_MODEL,
   OPENROUTER_FREE_PRIMARY_MODEL,
@@ -79,6 +80,9 @@ const DEFAULT_PROVIDERS = [
     }),
     extraBody: { reasoning: { enabled: false }, provider: OPENROUTER_PROVIDER_ROUTING },
   },
+  // Self-hosted AI Port (any API key, local model or subscription); last, so
+  // OpenRouter stays primary when configured. Active only with AI_PORT_TOKEN.
+  aiPortChainEntry({ userAgent: CHROME_UA, timeout: 60_000, maxRetries: 0 }),
 ];
 
 /**

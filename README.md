@@ -101,6 +101,24 @@ npm run dev:energy     # energy.worldmonitor.app
 
 See the **[self-hosting guide](https://www.worldmonitor.app/docs/getting-started)** for deployment options (Vercel, Docker, static).
 
+### Full self-hosted install, with any AI
+
+```bash
+./scripts/install-worldmonitor.sh
+```
+
+This one command generates the secrets, builds and starts the complete stack
+(dashboard, API, Redis, AIS relay and AI Port) and seeds data. Open
+<http://localhost:3000> for the dashboard. Open <http://localhost:8787> to
+connect **any AI** you have:
+
+- an API key from Anthropic, OpenAI, Gemini, Groq, Mistral, DeepSeek, xAI,
+  OpenRouter, Azure and others
+- a local model (Ollama, LM Studio)
+- a Claude, ChatGPT or Gemini subscription
+
+See [SELF_HOSTING.md](SELF_HOSTING.md) and [ai-port/README.md](ai-port/README.md).
+
 ---
 
 ## Tech Stack

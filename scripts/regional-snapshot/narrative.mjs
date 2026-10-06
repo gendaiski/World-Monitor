@@ -25,6 +25,7 @@ import { createHash } from 'node:crypto';
 import { extractFirstJsonObject, cleanJsonText } from '../_llm-json.mjs';
 import { withRetry, httpRetryError, createLlmBudgetError, isLlmBudgetError } from '../_seed-utils.mjs';
 import { buildLlmCallEvent, emitLlmEvents } from '../lib/llm-telemetry.cjs';
+import { aiPortChainEntry } from '../lib/ai-port-provider.mjs';
 import {
   OPENROUTER_FREE_BACKUP_MODEL,
   OPENROUTER_FREE_PRIMARY_MODEL,
@@ -105,6 +106,9 @@ const DEFAULT_PROVIDERS = [
     extraBody: { reasoning: { enabled: false }, provider: OPENROUTER_PROVIDER_ROUTING },
     maxRetries: 0,
   },
+  // Self-hosted AI Port (any API key, local model or subscription); last, so
+  // OpenRouter stays primary when configured. Active only with AI_PORT_TOKEN.
+  aiPortChainEntry({ userAgent: CHROME_UA, timeout: 45_000, maxRetries: 0 }),
 ];
 
 /**

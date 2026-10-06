@@ -1,13 +1,14 @@
 # =============================================================================
 # World Monitor — Docker / Podman Compose
 # =============================================================================
-# Self-contained stack: app + Redis + AIS relay.
+# Self-contained stack: app + Redis + AIS relay + AI Port.
 #
 # Quick start:
-#   cp .env.example .env        # add your API keys
-#   docker compose up -d --build
+#   ./scripts/install-worldmonitor.sh   # generates secrets, builds, seeds
+#   (or: cp .env.example .env && docker compose up -d --build)
 #
 # The app will be available at http://localhost:3000
+# The AI Port dashboard (connect any AI) at http://localhost:8787
 # =============================================================================
 
 services:
@@ -33,11 +34,22 @@ services:
       WORLDMONITOR_VALID_KEYS: "${WORLDMONITOR_VALID_KEYS:-}"
       RELAY_SHARED_SECRET: "${RELAY_SHARED_SECRET:?RELAY_SHARED_SECRET required — generate with: openssl rand -hex 32}"
       WORLDMONITOR_RELAY_KEY: "${WORLDMONITOR_RELAY_KEY:-}"
-      # LLM provider (any OpenAI-compatible endpoint)
-      LLM_API_URL: "${LLM_API_URL:-}"
-      LLM_API_KEY: "${LLM_API_KEY:-}"
-      LLM_MODEL: "${LLM_MODEL:-}"
+      # AI: every LLM feature goes through the AI Port first (any API key,
+      # local model or subscription — configure it at http://localhost:8787),
+      # then OpenRouter if OPENROUTER_API_KEY is set. Override LLM_API_URL /
+      # WM_AI_PORT_URL to point somewhere else.
+      OLLAMA_API_URL: "${WM_AI_PORT_URL:-http://ai-port:8787}"
+      OLLAMA_API_KEY: "${AI_PORT_TOKEN:-}"
+      OLLAMA_MODEL: "${AI_PORT_MODEL:-auto}"
+      LLM_API_URL: "${LLM_API_URL:-http://ai-port:8787/v1/chat/completions}"
+      LLM_API_KEY: "${LLM_API_KEY:-${AI_PORT_TOKEN:-}}"
+      LLM_MODEL: "${LLM_MODEL:-auto}"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      # Optional reasoning/tool profile routing (server/_shared/llm.ts)
+      LLM_REASONING_PROVIDER: "${LLM_REASONING_PROVIDER:-}"
+      LLM_REASONING_MODEL: "${LLM_REASONING_MODEL:-}"
+      LLM_TOOL_PROVIDER: "${LLM_TOOL_PROVIDER:-}"
+      LLM_TOOL_MODEL: "${LLM_TOOL_MODEL:-}"
       # Data source API keys (optional — features degrade gracefully)
       AISSTREAM_API_KEY: "${AISSTREAM_API_KEY:-}"
       FINNHUB_API_KEY: "${FINNHUB_API_KEY:-}"
@@ -65,6 +77,65 @@ services:
         condition: service_started
       ais-relay:
         condition: service_started
+      ai-port:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── AI Port: connect any AI (API key, local model, or subscription) ───────
+  # Dashboard: http://localhost:8787 (unlock with AI_PORT_ADMIN_TOKEN, or
+  # AI_PORT_TOKEN). Any key below is picked up automatically; more providers
+  # can be added from the dashboard. See ai-port/README.md.
+  ai-port:
+    build:
+      context: ai-port
+      dockerfile: Dockerfile
+      args:
+        INSTALL_SUBSCRIPTION_CLIS: "${AI_PORT_INSTALL_CLIS:-false}"
+    image: worldmonitor-ai-port:latest
+    container_name: worldmonitor-ai-port
+    ports:
+      - "127.0.0.1:${AI_PORT_PORT:-8787}:8787"
+    environment:
+      AI_PORT_TOKEN: "${AI_PORT_TOKEN:-}"
+      AI_PORT_ADMIN_TOKEN: "${AI_PORT_ADMIN_TOKEN:-}"
+      AI_PORT_DEFAULT_ROUTE: "${AI_PORT_DEFAULT_ROUTE:-}"
+      AI_PORT_FAST_ROUTE: "${AI_PORT_FAST_ROUTE:-}"
+      AI_PORT_ANTHROPIC_EFFORT: "${AI_PORT_ANTHROPIC_EFFORT:-}"
+      AI_PORT_ENABLE_CLAUDE_CLI: "${AI_PORT_ENABLE_CLAUDE_CLI:-}"
+      AI_PORT_ENABLE_CODEX_CLI: "${AI_PORT_ENABLE_CODEX_CLI:-}"
+      AI_PORT_ENABLE_GEMINI_CLI: "${AI_PORT_ENABLE_GEMINI_CLI:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      XAI_API_KEY: "${XAI_API_KEY:-}"
+      MISTRAL_API_KEY: "${MISTRAL_API_KEY:-}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      COHERE_API_KEY: "${COHERE_API_KEY:-}"
+      MOONSHOT_API_KEY: "${MOONSHOT_API_KEY:-}"
+      DASHSCOPE_API_KEY: "${DASHSCOPE_API_KEY:-}"
+      PERPLEXITY_API_KEY: "${PERPLEXITY_API_KEY:-}"
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
+      CEREBRAS_API_KEY: "${CEREBRAS_API_KEY:-}"
+      TOGETHER_API_KEY: "${TOGETHER_API_KEY:-}"
+      FIREWORKS_API_KEY: "${FIREWORKS_API_KEY:-}"
+      HF_TOKEN: "${HF_TOKEN:-}"
+      NVIDIA_API_KEY: "${NVIDIA_API_KEY:-}"
+      GITHUB_MODELS_TOKEN: "${GITHUB_MODELS_TOKEN:-}"
+      AZURE_OPENAI_API_KEY: "${AZURE_OPENAI_API_KEY:-}"
+      AZURE_OPENAI_BASE_URL: "${AZURE_OPENAI_BASE_URL:-}"
+      AZURE_OPENAI_DEPLOYMENT: "${AZURE_OPENAI_DEPLOYMENT:-}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      CUSTOM_LLM_BASE_URL: "${CUSTOM_LLM_BASE_URL:-}"
+      CUSTOM_LLM_API_KEY: "${CUSTOM_LLM_API_KEY:-}"
+      CUSTOM_LLM_MODEL: "${CUSTOM_LLM_MODEL:-}"
+      # Local models running on the Docker host (Ollama / LM Studio).
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-}"
+      LMSTUDIO_BASE_URL: "${LMSTUDIO_BASE_URL:-}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ai-port-data:/app/data
+      - ai-port-home:/home/node
     restart: unless-stopped
 
   ais-relay:
@@ -84,6 +155,13 @@ services:
       UCDP_ACCESS_TOKEN: "${UCDP_ACCESS_TOKEN:-}"
       # Optional: Jev shadows the classify seed and records disagreements; it decides nothing.
       TYPESAFE_API_KEY: "${TYPESAFE_API_KEY:-}"
+      # AI: headline classification and summaries go through the AI Port first.
+      OLLAMA_API_URL: "${WM_AI_PORT_URL:-http://ai-port:8787}"
+      OLLAMA_API_KEY: "${AI_PORT_TOKEN:-}"
+      OLLAMA_MODEL: "${AI_PORT_MODEL:-auto}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      # The AI widget builder uses Anthropic tool use directly (optional).
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       # Classify reads list-feed-digest from this install, not production (#7437).
       # Do not depends_on worldmonitor here — the app already depends_on ais-relay.
       # Transient connection retries cover the compose boot race instead.
@@ -154,3 +232,5 @@ services:
 
 volumes:
   redis-data:
+  ai-port-data:
+  ai-port-home:

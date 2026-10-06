@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Monitor AI Port</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #14181f; --muted: #5d6675; --line: #dde1e7;
+    --accent: #0b6bcb; --accent-ink: #ffffff; --ok: #137a3d; --bad: #b42318; --chip: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0e1116; --panel: #161b22; --ink: #e6edf3; --muted: #8b949e; --line: #2a313c;
+      --accent: #4493f8; --accent-ink: #0e1116; --ok: #3fb950; --bad: #f85149; --chip: #1f2630; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  p.lead { color: var(--muted); margin: 0 0 20px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  a { color: var(--accent); }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+  button { padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .provider { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .provider .head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .provider .name { font-weight: 600; }
+  .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--chip); color: var(--muted); margin-left: 6px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .result { font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 8px 0 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .table-wrap { overflow-x: auto; }
+  .hidden { display: none; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AI Port</h1>
+  <p class="lead">Connect any AI to World Monitor — an API key from any provider, a local model, or your existing Claude, ChatGPT or Gemini subscription. World Monitor talks to this port; the port talks to your AI.</p>
+
+  <section id="login">
+    <h2>Unlock</h2>
+    <label for="token">Admin token (<code>AI_PORT_ADMIN_TOKEN</code>, or <code>AI_PORT_TOKEN</code> if no admin token is set)</label>
+    <div class="row"><input id="token" type="password" autocomplete="current-password" style="flex:1;min-width:200px"><button class="primary" id="unlock">Unlock</button></div>
+    <div class="result" id="login-result"></div>
+  </section>
+
+  <div id="app" class="hidden">
+    <section>
+      <h2>Connected AI providers</h2>
+      <p class="meta">Requests try providers top to bottom and fall back to the next one if a provider fails. Use the arrows to set priority.</p>
+      <div id="providers"></div>
+    </section>
+
+    <section>
+      <h2>Add a provider</h2>
+      <div class="grid">
+        <div>
+          <label for="preset">Provider</label>
+          <select id="preset"></select>
+        </div>
+        <div>
+          <label for="pid">Name (id)</label>
+          <input id="pid" placeholder="e.g. anthropic">
+        </div>
+      </div>
+      <div class="grid">
+        <div id="key-wrap">
+          <label for="apikey">API key <a id="keylink" target="_blank" rel="noopener noreferrer"></a></label>
+          <input id="apikey" type="password" autocomplete="off">
+        </div>
+        <div>
+          <label for="model">Model</label>
+          <input id="model">
+        </div>
+      </div>
+      <div class="grid">
+        <div id="baseurl-wrap">
+          <label for="baseurl">Base URL</label>
+          <input id="baseurl">
+        </div>
+        <div id="command-wrap" class="hidden">
+          <label for="command">CLI command</label>
+          <input id="command">
+        </div>
+      </div>
+      <div id="cli-note" class="note hidden">
+        Subscription bridge: install the official CLI on the machine running the AI Port and sign in once
+        (<code>claude</code>, <code>codex login</code>, or <code>gemini</code>). The port runs it in one-shot mode; it never reads your credentials.
+        Your plan's usage limits and terms apply — for always-on, high-volume dashboards an API key is the better fit.
+      </div>
+      <div class="row" style="margin-top:14px"><button class="primary" id="add">Add provider</button><span class="result" id="add-result"></span></div>
+    </section>
+
+    <section>
+      <h2>Routes</h2>
+      <p class="meta">Optional. A route is an ordered fallback list of <code>provider</code> or <code>provider:model</code> entries. World Monitor uses <code>default</code>. Leave empty to use the provider order above.</p>
+      <label for="route-default">default</label>
+      <input id="route-default" placeholder="e.g. anthropic, groq:llama-3.3-70b-versatile, ollama">
+      <label for="route-fast">fast</label>
+      <input id="route-fast" placeholder="e.g. groq, cerebras">
+      <div class="row" style="margin-top:12px"><button id="save-routes">Save routes</button><span class="result" id="routes-result"></span></div>
+      <p class="note">Effective default order: <span id="effective"></span></p>
+    </section>
+
+    <section>
+      <h2>Use it from anything</h2>
+      <p class="meta">The port speaks the OpenAI chat-completions API, so any OpenAI-compatible tool can use it with your <code>AI_PORT_TOKEN</code>.</p>
+      <pre id="snippet"></pre>
+    </section>
+
+    <section>
+      <h2>Recent calls</h2>
+      <div class="table-wrap"><table><thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Result</th><th>ms</th></tr></thead><tbody id="recent"></tbody></table></div>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let token = '';
+  try { token = sessionStorage.getItem('aiPortToken') || ''; } catch {}
+  let state = null;
+
+  async function api(method, path, body) {
+    const resp = await fetch(path, {
+      method,
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(json?.error?.message || ('HTTP ' + resp.status));
+    return json;
+  }
+
+  function text(el, value, cls) { el.textContent = value; el.className = 'result ' + (cls || ''); }
+  function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null) continue;
+      if (k === 'class') node.className = v; else if (k.startsWith('on')) node.addEventListener(k.slice(2), v); else node.setAttribute(k, v);
+    }
+    for (const c of children) if (c != null) node.append(c);
+    return node;
+  }
+
+  function fileProviders() {
+    return state.providers.filter((p) => p.source !== 'env').map((p) => ({
+      id: p.id, originalId: p.id, preset: p.preset, label: p.label, baseUrl: p.baseUrl, model: p.model,
+      command: p.command, enabled: p.enabled, options: p.options,
+    }));
+  }
+
+  async function saveProviders(providers, resultEl) {
+    try {
+      state = await api('PUT', '/admin/api/config', { providers, routes: state.routes });
+      render();
+      if (resultEl) text(resultEl, 'Saved.', 'ok');
+    } catch (err) {
+      if (resultEl) text(resultEl, err.message, 'bad'); else alert(err.message);
+    }
+  }
+
+  function renderProviders() {
+    const box = $('providers');
+    box.replaceChildren();
+    if (!state.providers.length) {
+      box.append(el('p', { class: 'meta' }, 'No providers yet — add one below, or set a provider API key in the environment.'));
+      return;
+    }
+    const editable = fileProviders();
+    state.providers.forEach((p) => {
+      const result = el('div', { class: 'result' });
+      const isFile = p.source !== 'env';
+      const idx = editable.findIndex((e) => e.id === p.id);
+      const actions = el('div', { class: 'row' },
+        el('button', { onclick: async () => {
+          text(result, 'Testing…');
+          try {
+            const r = await api('POST', '/admin/api/test', { id: p.id });
+            text(result, r.ok ? `Connected in ${r.ms} ms — "${r.reply}"` : `Failed: ${r.error} ${r.detail || ''}`, r.ok ? 'ok' : 'bad');
+          } catch (err) { text(result, err.message, 'bad'); }
+        } }, 'Test'),
+        el('button', { onclick: async () => {
+          text(result, 'Loading models…');
+          try {
+            const r = await api('POST', '/admin/api/models', { id: p.id });
+            text(result, r.models.length ? r.models.slice(0, 200).join(', ') : 'This provider does not list models.');
+          } catch (err) { text(result, err.message, 'bad'); }
+        } }, 'Models'),
+      );
+      if (isFile) {
+        actions.append(
+          el('button', { title: 'Higher priority', disabled: idx <= 0 ? '' : null, onclick: () => {
+            const list = fileProviders(); [list[idx - 1], list[idx]] = [list[idx], list[idx - 1]]; saveProviders(list);
+          } }, '↑'),
+          el('button', { title: 'Lower priority', onclick: () => {
+            const list = fileProviders(); if (idx >= list.length - 1) return; [list[idx + 1], list[idx]] = [list[idx], list[idx + 1]]; saveProviders(list);
+          } }, '↓'),
+          el('button', { onclick: () => {
+            const model = prompt('Model for ' + p.id, p.model || '');
+            if (model == null) return;
+            const list = fileProviders(); list[idx].model = model.trim(); saveProviders(list);
+          } }, 'Change model'),
+          el('button', { onclick: () => { const list = fileProviders(); list[idx].enabled = !list[idx].enabled; saveProviders(list); } }, p.enabled ? 'Disable' : 'Enable'),
+          el('button', { onclick: () => { if (!confirm('Remove ' + p.id + '?')) return; saveProviders(fileProviders().filter((e) => e.id !== p.id)); } }, 'Remove'),
+        );
+      }
+      box.append(el('div', { class: 'provider' },
+        el('div', { class: 'head' },
+          el('div', {},
+            el('span', { class: 'name' }, p.id),
+            el('span', { class: 'chip' }, p.kind === 'cli' ? 'subscription CLI' : p.kind),
+            el('span', { class: 'chip' }, isFile ? 'saved' : 'from env'),
+            p.enabled ? null : el('span', { class: 'chip bad' }, 'disabled'),
+          ),
+          actions,
+        ),
+        el('div', { class: 'meta' }, `${p.label} · model: ${p.model || '(provider default)'} · ${p.kind === 'cli' ? 'command: ' + p.command : p.baseUrl}${p.hasKey ? ' · key ' + p.keyPreview : ''}`),
+        result,
+      ));
+    });
+  }
+
+  function renderPresetForm() {
+    const preset = state.presets[$('preset').value];
+    const isCli = preset.kind === 'cli';
+    $('pid').value = $('preset').value;
+    $('model').value = preset.model || '';
+    $('baseurl').value = preset.baseUrl || '';
+    $('command').value = isCli ? $('preset').value.startsWith('claude') ? 'claude' : $('preset').value.startsWith('chatgpt') ? 'codex' : 'gemini' : '';
+    $('key-wrap').classList.toggle('hidden', isCli);
+    $('baseurl-wrap').classList.toggle('hidden', isCli);
+    $('command-wrap').classList.toggle('hidden', !isCli);
+    $('cli-note').classList.toggle('hidden', !isCli);
+    $('apikey').placeholder = preset.keyOptional ? 'optional' : 'required';
+    const link = $('keylink');
+    link.textContent = preset.keyUrl ? '(get one)' : '';
+    if (preset.keyUrl) link.href = preset.keyUrl; else link.removeAttribute('href');
+  }
+
+  function render() {
+    renderProviders();
+    $('route-default').value = (state.routes.default || []).join(', ');
+    $('route-fast').value = (state.routes.fast || []).join(', ');
+    $('effective').textContent = state.defaultOrder.join(' → ') || '(none)';
+    const origin = location.origin;
+    $('snippet').textContent =
+`# World Monitor (.env) — already wired by docker-compose
+OLLAMA_API_URL=http://ai-port:8787
+OLLAMA_API_KEY=$AI_PORT_TOKEN
+OLLAMA_MODEL=auto
+
+# Any OpenAI-compatible client
+curl ${origin}/v1/chat/completions \\
+  -H "Authorization: Bearer $AI_PORT_TOKEN" -H "Content-Type: application/json" \\
+  -d '{"model":"auto","messages":[{"role":"user","content":"Hello"}]}'
+
+# Pick a provider/model explicitly:  "model": "anthropic:claude-opus-5-5"`;
+    renderRecent();
+  }
+
+  function renderRecent() {
+    const tbody = $('recent');
+    tbody.replaceChildren(...state.recent.map((r) => el('tr', {},
+      el('td', {}, new Date(r.at).toLocaleTimeString()),
+      el('td', {}, r.provider), el('td', {}, r.model || ''),
+      el('td', { class: r.ok ? 'ok' : 'bad' }, r.ok ? 'ok' : (r.error || 'failed')),
+      el('td', {}, String(r.ms)),
+    )));
+  }
+
+  async function load() {
+    state = await api('GET', '/admin/api/state');
+    const select = $('preset');
+    if (!select.options.length) {
+      for (const [key, p] of Object.entries(state.presets)) select.append(el('option', { value: key }, p.label));
+      select.addEventListener('change', renderPresetForm);
+      renderPresetForm();
+    }
+    render();
+  }
+
+  $('unlock').addEventListener('click', async () => {
+    token = $('token').value.trim();
+    try {
+      await load();
+      try { sessionStorage.setItem('aiPortToken', token); } catch {}
+      $('login').classList.add('hidden');
+      $('app').classList.remove('hidden');
+    } catch (err) { text($('login-result'), err.message, 'bad'); }
+  });
+
+  $('add').addEventListener('click', async () => {
+    const presetKey = $('preset').value;
+    const preset = state.presets[presetKey];
+    const entry = {
+      id: $('pid').value.trim().toLowerCase() || presetKey,
+      preset: presetKey,
+      model: $('model').value.trim(),
+      enabled: true,
+    };
+    if (preset.kind === 'cli') entry.command = $('command').value.trim();
+    else { entry.apiKey = $('apikey').value.trim(); entry.baseUrl = $('baseurl').value.trim(); }
+    const list = fileProviders().filter((p) => p.id !== entry.id);
+    list.push(entry);
+    await saveProviders(list, $('add-result'));
+    $('apikey').value = '';
+  });
+
+  $('save-routes').addEventListener('click', async () => {
+    const parse = (v) => v.split(',').map((s) => s.trim()).filter(Boolean);
+    const routes = { ...state.routes };
+    const d = parse($('route-default').value), f = parse($('route-fast').value);
+    if (d.length) routes.default = d; else delete routes.default;
+    if (f.length) routes.fast = f; else delete routes.fast;
+    try {
+      state = await api('PUT', '/admin/api/config', { providers: fileProviders(), routes });
+      render();
+      text($('routes-result'), 'Saved.', 'ok');
+    } catch (err) { text($('routes-result'), err.message, 'bad'); }
+  });
+
+  if (token) {
+    load().then(() => { $('login').classList.add('hidden'); $('app').classList.remove('hidden'); }).catch(() => {});
+  }
+  setInterval(() => {
+    if (!state || document.hidden) return;
+    api('GET', '/admin/api/state').then((next) => { state.recent = next.recent; renderRecent(); }).catch(() => {});
+  }, 15000);
+})();
+</script>
+</body>
+</html>

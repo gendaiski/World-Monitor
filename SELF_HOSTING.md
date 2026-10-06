@@ -10,6 +10,30 @@ Run the full World Monitor stack locally with Docker/Podman.
 
 ## 🚀 Quick Start
 
+### One command
+
+```bash
+git clone https://github.com/koala73/worldmonitor.git
+cd worldmonitor
+./scripts/install-worldmonitor.sh
+```
+
+The installer generates every required secret in `.env` and installs the Node
+dependencies the seeders need. It then builds and starts the stack (dashboard,
+API, Redis, AIS relay and **AI Port**), waits for it to come up, and seeds data.
+Re-running it is safe: existing secrets are never overwritten. Flags:
+`--no-seed` skips the initial seed; `--with-subscription-clis` builds the AI
+Port with the Claude Code, Codex and Gemini CLIs (see
+[Connect any AI](#-connect-any-ai-ai-port)).
+
+When it finishes, open:
+
+- **Dashboard:** http://localhost:3000
+- **AI Port:** http://localhost:8787. Connect your AI here. Unlock it with
+  `AI_PORT_ADMIN_TOKEN` from `.env`.
+
+### Manual steps
+
 ```bash
 # 1. Clone and enter the repo
 git clone https://github.com/koala73/worldmonitor.git
@@ -22,6 +46,9 @@ echo "RELAY_SHARED_SECRET=$(openssl rand -hex 32)" >> .env
 echo "REDIS_PASSWORD=$(openssl rand -hex 32)"      >> .env
 echo "REDIS_TOKEN=$(openssl rand -hex 32)"         >> .env
 echo "WM_SESSION_SECRET=$(openssl rand -hex 32)"   >> .env
+# AI Port: lets World Monitor use any AI (API key, local model, subscription)
+echo "AI_PORT_TOKEN=aip_$(openssl rand -hex 24)"   >> .env
+echo "AI_PORT_ADMIN_TOKEN=aipadmin_$(openssl rand -hex 24)" >> .env
 
 # 3. Start the stack
 docker compose up -d        # or: uvx podman-compose up -d
@@ -29,11 +56,28 @@ docker compose up -d        # or: uvx podman-compose up -d
 # 4. Seed data into Redis
 ./scripts/run-seeders.sh
 
-# 5. Open the dashboard
+# 5. Open the dashboard, then connect your AI at http://localhost:8787
 open http://localhost:3000
 ```
 
-The dashboard works out of the box with public data sources (earthquakes, weather, conflicts, etc.). API keys unlock additional data feeds.
+The dashboard works out of the box with public data sources (earthquakes, weather, conflicts, etc.). API keys unlock additional data feeds; connecting an AI unlocks summaries, classification, briefs, the analyst chat, regional narratives and forecasts.
+
+## 🧠 Connect any AI (AI Port)
+
+Every AI feature in World Monitor goes through the bundled **AI Port**
+(`ai-port/`, service `ai-port`). The AI Port is one OpenAI-compatible endpoint
+in front of whatever AI you have:
+
+| You have | How to connect |
+|---|---|
+| An API key (Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, Cohere, Moonshot, Qwen, Perplexity, Groq, Cerebras, Together, Fireworks, Hugging Face, NVIDIA, GitHub Models, Azure OpenAI, OpenRouter) | Paste it in the AI Port dashboard, or set e.g. `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` in `.env` |
+| A local model (Ollama, LM Studio, vLLM, llama.cpp, LiteLLM, …) | `OLLAMA_BASE_URL=http://host.docker.internal:11434/v1`, `LMSTUDIO_BASE_URL=…`, or `CUSTOM_LLM_BASE_URL=…` |
+| A Claude Pro/Max, ChatGPT Plus/Pro or Gemini subscription | Install with `--with-subscription-clis`, sign in once with `docker compose exec -it ai-port claude` (or `codex login` / `gemini`), and set `AI_PORT_ENABLE_CLAUDE_CLI=true` (or `…_CODEX_CLI` / `…_GEMINI_CLI`) |
+
+Connect several providers at once. Requests go to the first provider in the
+list and fall back to the next one when a provider fails. Full details are in
+[ai-port/README.md](ai-port/README.md): routes, model selection, subscription
+caveats, the desktop app and the API.
 
 ## Documentation indexing
 
@@ -132,7 +176,8 @@ Create a `docker-compose.override.yml` to inject your keys. This file is **gitig
 services:
   worldmonitor:
     environment:
-      # 🤖 LLM (used for intelligence assessments)
+      # 🤖 LLM: prefer connecting your AI in the AI Port (http://localhost:8787,
+      # see "Connect any AI" above). OpenRouter still works directly too.
       OPENROUTER_API_KEY: ""      # https://openrouter.ai (free, 50 req/day)
 
       # 📊 Markets & Economics
@@ -158,10 +203,11 @@ services:
       # 🌐 Internet Outages (paid)
       CLOUDFLARE_API_TOKEN: ""    # https://dash.cloudflare.com (requires Radar access)
 
-      # 🔌 Self-hosted LLM (optional — any OpenAI-compatible endpoint)
-      LLM_API_URL: ""             # e.g. http://localhost:11434/v1/chat/completions
-      LLM_API_KEY: ""
-      LLM_MODEL: ""
+      # 🔌 LLM endpoint: defaults to the bundled AI Port. Override only to
+      # bypass it (any OpenAI-compatible chat/completions URL).
+      # LLM_API_URL: "http://ai-port:8787/v1/chat/completions"
+      # LLM_API_KEY: ""
+      # LLM_MODEL: "auto"
       # Same value as ais-relay — gateway accepts it on list-feed-digest (#7437).
       WORLDMONITOR_RELAY_KEY: ""
 

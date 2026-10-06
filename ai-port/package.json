@@ -1,0 +1,19 @@
+{
+  "name": "worldmonitor-ai-port",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Universal AI connection port for World Monitor: one OpenAI-compatible endpoint in front of any AI provider, API key, local model, or subscription CLI.",
+  "type": "module",
+  "main": "src/server.mjs",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1"
+  },
+  "license": "AGPL-3.0-only"
+}

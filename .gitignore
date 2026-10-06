@@ -155,3 +155,6 @@ playground-pricing.html
 # compile time — `cargo test` fails on a resource path that does not exist.
 src-tauri/notices/*
 !src-tauri/notices/.gitkeep
+
+# AI Port local config (contains provider API keys)
+ai-port/data/

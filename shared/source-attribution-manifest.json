@@ -6012,6 +6012,9 @@
           "path": "scripts/ais-relay.cjs"
         },
         {
+          "path": "scripts/lib/ai-port-provider.mjs"
+        },
+        {
           "path": "server/worldmonitor/research/v1/list-tech-events.ts"
         },
         {
