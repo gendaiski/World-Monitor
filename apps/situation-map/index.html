@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="World Monitor situation map: conflict zones, intel hotspots, military bases, chokepoints, cables, pipelines, nuclear and AI sites, with live USGS earthquakes and NASA natural events.">
+<meta name="color-scheme" content="light dark">
+<title>World Monitor Situation Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen situation room — top bar, map left (layers + regions overlaid), widget rail right; stacks on phones. */
+:root {
+  --bg: #e8ecf0;
+  --panel: #ffffff;
+  --panel-2: #f3f5f8;
+  --ink: #15202b;
+  --muted: #5a6776;
+  --line: #d0d8e0;
+  --sea: #d3dfe8;
+  --land: #f1f2ec;
+  --land-line: #c3cbc4;
+  --graticule: rgba(40, 70, 100, 0.08);
+  --accent: #0e7a4e;
+  --accent-ink: #ffffff;
+  --crit: #d93a3f;
+  --high: #e8640f;
+  --elev: #c98a00;
+  --low: #3f8f4f;
+  --zone: rgba(217, 58, 63, 0.16);
+  --zone-line: rgba(217, 58, 63, 0.75);
+  --sanction: rgba(201, 138, 0, 0.16);
+  --cable: #2c7fb8;
+  --oil: #8c5a2b;
+  --gas: #2f8f8f;
+  --tooltip-bg: #15202b;
+  --tooltip-ink: #f1f4f7;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0f14; --panel: #10181f; --panel-2: #0d141a; --ink: #dbe3ea; --muted: #8796a5; --line: #1f2c38;
+    --sea: #08121a; --land: #16212b; --land-line: #2a3846; --graticule: rgba(140, 170, 200, 0.07);
+    --accent: #34c98a; --accent-ink: #06130d; --crit: #ff5a5f; --high: #ff8a3d; --elev: #f2b632; --low: #5cc46f;
+    --zone: rgba(255, 90, 95, 0.16); --zone-line: rgba(255, 90, 95, 0.8); --sanction: rgba(242, 182, 50, 0.12);
+    --cable: #4aa8e0; --oil: #c48a52; --gas: #4cc2c2; --tooltip-bg: #e9eef3; --tooltip-ink: #0a0f14;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0f14; --panel: #10181f; --panel-2: #0d141a; --ink: #dbe3ea; --muted: #8796a5; --line: #1f2c38;
+  --sea: #08121a; --land: #16212b; --land-line: #2a3846; --graticule: rgba(140, 170, 200, 0.07);
+  --accent: #34c98a; --accent-ink: #06130d; --crit: #ff5a5f; --high: #ff8a3d; --elev: #f2b632; --low: #5cc46f;
+  --zone: rgba(255, 90, 95, 0.16); --zone-line: rgba(255, 90, 95, 0.8); --sanction: rgba(242, 182, 50, 0.12);
+  --cable: #4aa8e0; --oil: #c48a52; --gas: #4cc2c2; --tooltip-bg: #e9eef3; --tooltip-ink: #0a0f14;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font-body); overflow: hidden; }
+button { font: inherit; color: inherit; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--font-mono); }
+.label { font: 500 11px/1.3 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.topbar { display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap; padding: 8px 16px; padding-top: calc(8px + env(safe-area-inset-top, 0px)); background: var(--panel); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand b { font: 600 15px/1 var(--font-mono); letter-spacing: 0.28em; }
+.brand span { font: 12px/1 var(--font-mono); color: var(--muted); }
+.status-chip { display: inline-flex; align-items: center; gap: 7px; font: 500 11px/1 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; padding: 6px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+.status-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--elev); }
+.status-chip.live::before { background: var(--low); }
+.clock { font: 500 12px/1 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 390px; min-height: 0; }
+.map-wrap { position: relative; min-width: 0; min-height: 0; background: var(--sea); overflow: hidden; }
+#map { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#map:active { cursor: grabbing; }
+.rail { min-height: 0; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel-2); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.rail > .widget { flex: none; }
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .app { height: auto; min-height: 100%; }
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .map-wrap { height: 62vh; min-height: 360px; }
+  .rail { border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+}
+
+/* Map overlays */
+.overlay { position: absolute; z-index: 2; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: 8px; backdrop-filter: blur(4px); }
+.regions { top: 10px; left: 10px; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; max-width: calc(100% - 80px); }
+.regions button, .zoom button { border: 0; background: transparent; padding: 6px 9px; border-radius: 5px; font: 500 11px/1 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.regions button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.regions button:hover:not([aria-pressed="true"]) { color: var(--ink); background: var(--panel-2); }
+.zoom { top: 10px; right: 10px; display: grid; padding: 4px; }
+.zoom button { font-size: 15px; padding: 6px 10px; }
+.layers { left: 10px; bottom: 10px; padding: 8px; max-width: min(560px, calc(100% - 20px)); display: grid; gap: 6px; }
+.layer-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.layer { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--panel); font: 500 11px/1 var(--font-mono); letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.layer .sw { width: 9px; height: 9px; border-radius: 50%; flex: none; opacity: 0.35; }
+.layer[aria-pressed="true"] { color: var(--ink); border-color: var(--muted); }
+.layer[aria-pressed="true"] .sw { opacity: 1; }
+.layer .n { color: var(--muted); font-weight: 400; }
+.layers-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.layers summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.layers summary::-webkit-details-marker { display: none; }
+.layers summary::after { content: "▾"; color: var(--muted); font-size: 11px; }
+.layers:not([open]) summary::after { content: "▸"; }
+.layers:not([open]) { padding: 6px 10px; }
+.layers-head button { border: 0; background: none; padding: 0; color: var(--muted); font: 11px/1.3 var(--font-mono); cursor: pointer; text-decoration: underline; }
+.tooltip { position: absolute; z-index: 3; pointer-events: none; background: var(--tooltip-bg); color: var(--tooltip-ink); font: 12px/1.35 var(--font-body); padding: 6px 8px; border-radius: 5px; max-width: 260px; }
+.tooltip b { display: block; font-weight: 600; }
+@media (max-width: 560px) { .layers[open] { max-height: 55%; overflow-y: auto; } }
+
+/* Map marks */
+.sphere { fill: var(--sea); }
+.graticule { fill: none; stroke: var(--graticule); }
+.country { fill: var(--land); stroke: var(--land-line); }
+.country.sanctioned { fill: color-mix(in srgb, var(--land) 100%, transparent); }
+.sanction-fill { fill: var(--sanction); pointer-events: none; }
+.zone { fill: var(--zone); stroke: var(--zone-line); stroke-dasharray: 4 3; cursor: pointer; }
+.zone.selected, .zone:hover { fill: color-mix(in srgb, var(--crit) 28%, transparent); }
+.cable { fill: none; stroke: var(--cable); stroke-opacity: 0.7; cursor: pointer; }
+.cable.major { stroke-opacity: 0.95; }
+.pipe { fill: none; cursor: pointer; }
+.pipe.oil { stroke: var(--oil); } .pipe.gas { stroke: var(--gas); }
+.cable:hover, .pipe:hover, .selected-line { stroke-width: 3; }
+.pt { cursor: pointer; stroke: var(--panel); }
+.pt.selected { stroke: var(--ink); }
+.pulse { fill: none; pointer-events: none; animation: pulse 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes pulse { 0% { opacity: 0.85; transform: scale(1); } 100% { opacity: 0; transform: scale(3.2); } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; opacity: 0.4; } }
+.wlabel { font: 500 9px/1 var(--font-mono); letter-spacing: 0.06em; fill: var(--muted); pointer-events: none; paint-order: stroke; stroke: var(--sea); stroke-width: 3px; }
+
+/* Rail widgets */
+.widget { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.widget-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.widget-head h2 { margin: 0; font: 600 12px/1.2 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.widget-body { padding: 10px 12px; display: grid; gap: 8px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.stat { display: grid; gap: 2px; }
+.stat .v { font: 600 22px/1.1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.stat .k { font: 500 10px/1.25 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.stat .v.crit { color: var(--crit); } .stat .v.high { color: var(--high); }
+
+.rows { display: grid; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; text-align: left; border: 0; border-top: 1px solid var(--line); background: none; padding: 8px 0; cursor: pointer; }
+.row:first-child { border-top: 0; }
+.row:hover .row-title { color: var(--accent); }
+.row-title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.row-sub { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+.pips { display: inline-flex; gap: 2px; }
+.pips i { width: 7px; height: 12px; border-radius: 1px; background: var(--line); }
+.chip { display: inline-flex; align-items: center; gap: 5px; font: 500 10.5px/1 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; white-space: nowrap; }
+.chip.crit { color: var(--crit); background: color-mix(in srgb, var(--crit) 14%, transparent); }
+.chip.high { color: var(--high); background: color-mix(in srgb, var(--high) 14%, transparent); }
+.chip.elev { color: var(--elev); background: color-mix(in srgb, var(--elev) 16%, transparent); }
+.chip.low { color: var(--low); background: color-mix(in srgb, var(--low) 14%, transparent); }
+.chip.muted { color: var(--muted); background: var(--panel-2); }
+
+.detail h3 { margin: 0; font-size: 17px; line-height: 1.25; text-wrap: balance; }
+.detail .sub { color: var(--muted); font-size: 13px; }
+.detail p { margin: 0; }
+.detail ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); font: 500 11px/1.6 var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.bars { display: grid; gap: 6px; }
+.bar { display: grid; grid-template-columns: 92px minmax(0, 1fr) 34px; gap: 8px; align-items: center; font-size: 12px; }
+.bar .name { font: 500 11px/1.2 var(--font-mono); text-transform: uppercase; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .track { height: 9px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
+.bar .fill { height: 100%; border-radius: 2px; }
+.bar .num { font: 500 12px/1 var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+
+.ai-out { white-space: pre-wrap; font-size: 13.5px; line-height: 1.55; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 10px; min-height: 64px; overflow-wrap: anywhere; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); font: 600 13px/1 var(--font-body); padding: 9px 12px; border-radius: 6px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.note { font-size: 12px; color: var(--muted); }
+.feed { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.feed:first-child { border-top: 0; }
+.feed b { font-weight: 600; }
+.feed span.src { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+pre.cmd { margin: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: 12px/1.5 var(--font-mono); overflow-x: auto; }
+.empty { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><b>MONITOR</b><span>v2.10.0 · gendaiski/World-Monitor</span></div>
+    <span class="status-chip" id="status-chip" title="Curated layers from World Monitor, plus live USGS and NASA feeds">Connecting live feeds</span>
+    <span class="clock" id="clock" aria-label="Current UTC time"></span>
+  </header>
+
+  <div class="main">
+    <div class="map-wrap" id="map-wrap">
+      <svg id="map" role="img" aria-label="World map with World Monitor intelligence layers"></svg>
+      <div class="overlay regions" role="group" aria-label="Region" id="regions"></div>
+      <div class="overlay zoom" role="group" aria-label="Zoom">
+        <button type="button" id="zin" aria-label="Zoom in">+</button>
+        <button type="button" id="zout" aria-label="Zoom out">−</button>
+        <button type="button" id="zreset" aria-label="Reset view">⟲</button>
+      </div>
+      <details class="overlay layers" id="layers-panel" open>
+        <summary class="label">Layers</summary>
+        <div class="layers-head"><span class="note">Tap a layer to show or hide it</span><button type="button" id="all-layers">Show all</button></div>
+        <div class="layer-list" id="layer-list"></div>
+      </details>
+      <div class="tooltip" id="tooltip" hidden></div>
+    </div>
+
+    <aside class="rail" aria-label="Widgets">
+      <section class="widget" aria-labelledby="w-sit">
+        <div class="widget-head"><h2 id="w-sit">Global situation</h2><span class="label">35c2c35</span></div>
+        <div class="widget-body"><div class="stats" id="stats"></div></div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-detail">
+        <div class="widget-head"><h2 id="w-detail">Selected</h2><span class="label" id="detail-kind"></span></div>
+        <div class="widget-body detail" id="detail"></div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-ai">
+        <div class="widget-head"><h2 id="w-ai">AI analyst</h2><span class="label" id="ai-provider">AI brief</span></div>
+        <div class="widget-body">
+          <p class="note" id="ai-target"></p>
+          <div class="btn-row">
+            <button class="btn" type="button" id="ai-run">Brief me</button>
+            <button class="btn ghost" type="button" id="ai-stop" disabled>Stop</button>
+          </div>
+          <div class="ai-out" id="ai-out" aria-live="polite">Pick anything on the map, then press "Brief me" for a short assessment written from World Monitor's data.</div>
+        </div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-hot">
+        <div class="widget-head"><h2 id="w-hot">Intel hotspots</h2><span class="label">Escalation 1–5</span></div>
+        <div class="widget-body"><div class="rows" id="hotspots"></div></div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-conf">
+        <div class="widget-head"><h2 id="w-conf">Active conflicts</h2><span class="label" id="conf-count"></span></div>
+        <div class="widget-body"><div class="rows" id="conflicts"></div></div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-choke">
+        <div class="widget-head"><h2 id="w-choke">Strategic chokepoints</h2><span class="label" id="choke-count"></span></div>
+        <div class="widget-body"><div class="rows" id="chokepoints"></div></div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-force">
+        <div class="widget-head"><h2 id="w-force">Force posture</h2><span class="label">Bases by operator</span></div>
+        <div class="widget-body"><div class="bars" id="bases-bars"></div></div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-nuke">
+        <div class="widget-head"><h2 id="w-nuke">Nuclear &amp; AI compute</h2><span class="label">Facilities</span></div>
+        <div class="widget-body"><div class="bars" id="nuke-bars"></div></div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-quakes">
+        <div class="widget-head"><h2 id="w-quakes">Seismic activity</h2><span class="label">USGS · M4.5+ · 7 days</span></div>
+        <div class="widget-body"><div class="rows" id="quakes"><p class="empty">Loading earthquakes…</p></div></div>
+      </section>
+
+      <section class="widget" aria-labelledby="w-feeds">
+        <div class="widget-head"><h2 id="w-feeds">Live feeds</h2><span class="label" id="feeds-updated"></span></div>
+        <div class="widget-body">
+          <div id="feeds"></div>
+          <p class="note">Earthquakes, natural events and crypto prices refresh every five minutes, straight from USGS, NASA EONET and CoinGecko. News, aviation, maritime and full markets need the complete World Monitor stack:</p>
+          <pre class="cmd">git clone https://github.com/gendaiski/World-Monitor.git
+cd World-Monitor && ./scripts/install-worldmonitor.sh</pre>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  let DATA; let WORLD;
+  try {
+    [DATA, WORLD] = await Promise.all(['/data/layers.json', '/data/countries-50m.json'].map(async (u) => {
+      const r = await fetch(u);
+      if (!r.ok) throw new Error(`${u}: HTTP ${r.status}`);
+      return r.json();
+    }));
+  } catch (err) {
+    $('detail').textContent = 'The map data did not load. Reload the page.';
+    console.error(err);
+    return;
+  }
+  const LIVE = { quakes: [], events: [] };
+  // World Monitor scores only some hotspots; the rest start at baseline (1) and rise with news activity.
+  for (const h of DATA.INTEL_HOTSPOTS) { h._scored = typeof h.escalationScore === 'number'; h._score = h._scored ? h.escalationScore : 1; }
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const el = (tag, props = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (v == null) continue;
+      if (k === 'class') n.className = v;
+      else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v);
+    }
+    for (const kid of kids) if (kid != null) n.append(kid);
+    return n;
+  };
+
+  // Clock
+  const clock = $('clock');
+  const tick = () => { clock.textContent = new Date().toUTCString().replace('GMT', 'UTC'); };
+  tick(); setInterval(tick, 1000);
+
+  if (!window.d3 || !window.topojson) {
+    $('map-wrap').append(el('p', { class: 'overlay', style: 'top:50%;left:50%;transform:translate(-50%,-50%);padding:12px', text: 'The map library did not load. Reload the page.' }));
+  }
+
+  // ── Constants from World Monitor config ───────────────────────────────
+  const BASE_COLORS = { 'us-nato': '#4488ff', russia: '#ff4444', china: '#ff8844', uk: '#44aaff', france: '#0055a4', india: '#ff9933', japan: '#bc002d', italy: '#009246', uae: '#00735e', turkey: '#e30a17' };
+  const BASE_LABELS = { 'us-nato': 'US / NATO', russia: 'Russia', china: 'China', uk: 'UK', france: 'France', india: 'India', japan: 'Japan', italy: 'Italy', uae: 'UAE', turkey: 'Turkey' };
+  const NUKE_LABELS = { plant: 'Power plant', research: 'Research', 'test-site': 'Test site', weapons: 'Weapons', enrichment: 'Enrichment', reprocessing: 'Reprocessing' };
+  const escLevel = (s) => (s >= 5 ? 'crit' : s >= 4 ? 'high' : s >= 3 ? 'elev' : 'low');
+  const escWord = { crit: 'Critical', high: 'High', elev: 'Elevated', low: 'Monitoring' };
+  const intensityLevel = (i) => (i === 'high' ? 'crit' : i === 'medium' ? 'high' : 'elev');
+
+  const LAYERS = [
+    { id: 'zones', label: 'Conflict zones', color: () => css('--crit'), count: DATA.CONFLICT_ZONES.length, on: true },
+    { id: 'hotspots', label: 'Intel hotspots', color: () => css('--high'), count: DATA.INTEL_HOTSPOTS.length, on: true },
+    { id: 'bases', label: 'Military bases', color: () => '#4488ff', count: DATA.MILITARY_BASES.length, on: true },
+    { id: 'waterways', label: 'Chokepoints', color: () => css('--accent'), count: DATA.STRATEGIC_WATERWAYS.length, on: true },
+    { id: 'sanctions', label: 'Sanctions', color: () => css('--elev'), count: Object.keys(DATA.SANCTIONED_COUNTRIES).length, on: true },
+    { id: 'nuclear', label: 'Nuclear sites', color: () => '#b45fd6', count: DATA.NUCLEAR_FACILITIES.length, on: false },
+    { id: 'cables', label: 'Undersea cables', color: () => css('--cable'), count: DATA.UNDERSEA_CABLES.length, on: false },
+    { id: 'pipelines', label: 'Pipelines', color: () => css('--oil'), count: DATA.PIPELINES.length, on: false },
+    { id: 'aidc', label: 'AI data centers', color: () => '#16a3a3', count: DATA.AI_DATA_CENTERS.length, on: false },
+    { id: 'econ', label: 'Economic centers', color: () => '#6b7cff', count: DATA.ECONOMIC_CENTERS.length, on: false },
+    { id: 'space', label: 'Spaceports', color: () => '#9aa4b0', count: DATA.SPACEPORTS.length, on: false },
+    { id: 'quakes', label: 'Earthquakes · live', color: () => css('--high'), count: 0, on: true },
+    { id: 'events', label: 'Natural events · live', color: () => '#e0752d', count: 0, on: true },
+  ];
+  const state = { layers: Object.fromEntries(LAYERS.map((l) => [l.id, l.on])), selected: null };
+
+  // ── Map ────────────────────────────────────────────────────────────────
+  const wrap = $('map-wrap');
+  const svg = d3.select('#map');
+  const root = svg.append('g');
+  const projection = d3.geoNaturalEarth1();
+  const path = d3.geoPath(projection);
+  let K = 1;
+
+  const countries = topojson.feature(WORLD, WORLD.objects.countries);
+  const borders = topojson.mesh(WORLD, WORLD.objects.countries, (a, b) => a !== b);
+  const sanctionIds = new Set(Object.keys(DATA.SANCTIONED_COUNTRIES).map(Number));
+
+  const ring = (coords) => {
+    const closed = coords.length && (coords[0][0] !== coords.at(-1)[0] || coords[0][1] !== coords.at(-1)[1]) ? [...coords, coords[0]] : coords;
+    let feat = { type: 'Feature', geometry: { type: 'Polygon', coordinates: [closed] } };
+    if (d3.geoArea(feat) > 2 * Math.PI) feat = { type: 'Feature', geometry: { type: 'Polygon', coordinates: [closed.slice().reverse()] } };
+    return feat;
+  };
+  const line = (pts) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: pts } });
+
+  const g = {};
+  for (const name of ['base', 'sanctions', 'zones', 'pipelines', 'cables', 'waterways', 'aidc', 'nuclear', 'econ', 'space', 'bases', 'events', 'quakes', 'hotspots']) g[name] = root.append('g');
+
+  const tooltip = $('tooltip');
+  function showTip(evt, title, sub) {
+    tooltip.replaceChildren(el('b', { text: title }), sub ? document.createTextNode(sub) : null);
+    tooltip.hidden = false;
+    const r = wrap.getBoundingClientRect();
+    let x = evt.clientX - r.left + 12; let y = evt.clientY - r.top + 12;
+    const tw = tooltip.offsetWidth; const th = tooltip.offsetHeight;
+    if (x + tw > r.width - 6) x = evt.clientX - r.left - tw - 12;
+    if (y + th > r.height - 6) y = evt.clientY - r.top - th - 12;
+    tooltip.style.left = `${Math.max(6, x)}px`; tooltip.style.top = `${Math.max(6, y)}px`;
+  }
+  const hideTip = () => { tooltip.hidden = true; };
+  const bindTip = (sel, title, sub) => sel
+    .on('pointerenter pointermove', (e, d) => showTip(e, title(d), sub?.(d)))
+    .on('pointerleave', hideTip);
+
+  function draw() {
+    const w = wrap.clientWidth; const h = wrap.clientHeight;
+    svg.attr('viewBox', `0 0 ${w} ${h}`);
+    projection.fitExtent([[8, 8], [w - 8, h - 8]], { type: 'Sphere' });
+    for (const k of Object.keys(g)) g[k].selectAll('*').remove();
+
+    g.base.append('path').datum({ type: 'Sphere' }).attr('class', 'sphere').attr('d', path);
+    g.base.append('path').datum(d3.geoGraticule10()).attr('class', 'graticule').attr('d', path).attr('vector-effect', 'non-scaling-stroke');
+    g.base.selectAll('path.country').data(countries.features).join('path')
+      .attr('class', 'country').attr('d', path).attr('stroke-width', 0)
+      .call(bindTip, (d) => d.properties.name, (d) => (sanctionIds.has(Number(d.id)) ? `Sanctions: ${DATA.SANCTIONED_COUNTRIES[Number(d.id)]}` : null));
+    g.base.append('path').datum(borders).attr('fill', 'none').attr('stroke', css('--land-line')).attr('stroke-width', 0.6).attr('vector-effect', 'non-scaling-stroke').attr('d', path).attr('pointer-events', 'none');
+
+    g.sanctions.selectAll('path').data(countries.features.filter((f) => sanctionIds.has(Number(f.id)))).join('path')
+      .attr('class', 'sanction-fill').attr('d', path);
+
+    g.zones.selectAll('path').data(DATA.CONFLICT_ZONES).join('path')
+      .attr('class', 'zone').attr('d', (d) => path(ring(d.coords))).attr('vector-effect', 'non-scaling-stroke').attr('stroke-width', 1.2)
+      .call(bindTip, (d) => d.name, (d) => `${d.intensity} intensity · since ${d.startDate || '—'}`)
+      .on('click', (e, d) => select('conflict', d));
+
+    g.pipelines.selectAll('path').data(DATA.PIPELINES).join('path')
+      .attr('class', (d) => `pipe ${d.type}`).attr('d', (d) => path(line(d.points))).attr('stroke-width', 1.6).attr('vector-effect', 'non-scaling-stroke')
+      .call(bindTip, (d) => d.name, (d) => `${d.type} pipeline · ${d.status}`)
+      .on('click', (e, d) => select('pipeline', d));
+
+    g.cables.selectAll('path').data(DATA.UNDERSEA_CABLES).join('path')
+      .attr('class', (d) => `cable${d.major ? ' major' : ''}`).attr('d', (d) => path(line(d.points))).attr('stroke-width', (d) => (d.major ? 1.6 : 1)).attr('vector-effect', 'non-scaling-stroke')
+      .call(bindTip, (d) => d.name, (d) => `Undersea cable${d.rfsYear ? ` · in service ${d.rfsYear}` : ''}`)
+      .on('click', (e, d) => select('cable', d));
+
+    const pts = (layer, data, cls, color, baseR, kind, title, sub) => {
+      const sel = g[layer].selectAll('circle').data(data).join('circle')
+        .attr('class', `pt ${cls}`).attr('cx', (d) => projection([d.lon, d.lat])[0]).attr('cy', (d) => projection([d.lon, d.lat])[1])
+        .attr('data-r', baseR).attr('r', baseR / K).attr('fill', color).attr('stroke-width', 0.8 / K)
+        .call(bindTip, title, sub)
+        .on('click', (e, d) => select(kind, d));
+      return sel;
+    };
+
+    pts('aidc', DATA.AI_DATA_CENTERS, 'aidc', '#16a3a3', 2.6, 'aidc', (d) => d.name, (d) => `${d.status} · ${d.country}`);
+    pts('nuclear', DATA.NUCLEAR_FACILITIES, 'nuke', (d) => (d.type === 'weapons' || d.type === 'test-site' || d.type === 'enrichment' ? '#c0392b' : '#b45fd6'), 2.8, 'nuclear', (d) => d.name, (d) => `${NUKE_LABELS[d.type] || d.type} · ${d.status}`);
+    pts('econ', DATA.ECONOMIC_CENTERS, 'econ', '#6b7cff', 3.4, 'econ', (d) => d.name, (d) => `${d.type} · ${d.country}`);
+    pts('space', DATA.SPACEPORTS, 'space', '#9aa4b0', 3.6, 'spaceport', (d) => d.name, (d) => `${d.operator} · ${d.country}`);
+    pts('bases', DATA.MILITARY_BASES, 'base', (d) => BASE_COLORS[d.type] || '#888888', 2.9, 'base', (d) => d.name, (d) => `${BASE_LABELS[d.type] || d.type} · ${d.country}`);
+    drawLive();
+
+    // Waterways: diamond markers with labels
+    const ww = g.waterways.selectAll('g').data(DATA.STRATEGIC_WATERWAYS).join('g')
+      .attr('transform', (d) => { const [x, y] = projection([d.lon, d.lat]); return `translate(${x},${y})`; })
+      .on('click', (e, d) => select('waterway', d))
+      .call(bindTip, (d) => d.name, (d) => d.description);
+    ww.append('rect').attr('class', 'pt ww').attr('x', -4).attr('y', -4).attr('width', 8).attr('height', 8).attr('transform', 'rotate(45)').attr('fill', css('--accent'));
+    ww.append('text').attr('class', 'wlabel').attr('x', 8).attr('y', 3).text((d) => d.name);
+
+    // Hotspots: escalation-colored with pulse on 4+
+    const hs = g.hotspots.selectAll('g').data(DATA.INTEL_HOTSPOTS).join('g')
+      .attr('transform', (d) => { const [x, y] = projection([d.lon, d.lat]); return `translate(${x},${y})`; })
+      .on('click', (e, d) => select('hotspot', d))
+      .call(bindTip, (d) => d.name, (d) => [d.subtext, d._scored ? `escalation ${d._score}/5` : 'baseline'].filter(Boolean).join(' · '));
+    hs.filter((d) => d._score >= 4).append('circle').attr('class', 'pulse').attr('r', 4.5)
+      .attr('stroke', (d) => css(`--${escLevel(d._score)}`)).attr('stroke-width', 1.5);
+    hs.append('circle').attr('class', 'pt hot').attr('data-r', 4.6).attr('r', 4.6)
+      .attr('fill', (d) => css(`--${escLevel(d._score)}`)).attr('stroke-width', 1);
+
+    applyZoomScale();
+    applyLayers();
+    markSelected();
+  }
+
+  const EVENT_COLORS = { Wildfires: '#e0752d', Volcanoes: '#c0392b', 'Severe Storms': '#3b82c4', Floods: '#2f8f8f', 'Sea and Lake Ice': '#8fb3c9', Earthquakes: '#e8640f', Landslides: '#8c6a43', Drought: '#c98a00' };
+  const quakeColor = (m) => css(m >= 6.5 ? '--crit' : m >= 5.5 ? '--high' : '--elev');
+  const fmtTime = (iso) => new Date(iso).toUTCString().replace(/:\d\d GMT$/, ' UTC');
+  function drawLive() {
+    g.events.selectAll('*').remove();
+    g.quakes.selectAll('*').remove();
+    g.events.selectAll('rect').data(LIVE.events).join('rect')
+      .attr('class', 'pt ev').attr('data-s', 6)
+      .attr('fill', (d) => EVENT_COLORS[d.category] || '#9aa4b0')
+      .call(bindTip, (d) => d.title, (d) => `${d.category} · ${d.date ? d.date.slice(0, 10) : ''}`)
+      .on('click', (e, d) => select('event', d));
+    g.quakes.selectAll('circle').data(LIVE.quakes).join('circle')
+      .attr('class', 'pt quake').attr('cx', (d) => projection([d.lon, d.lat])[0]).attr('cy', (d) => projection([d.lon, d.lat])[1])
+      .attr('data-r', (d) => Math.max(2.4, (d.mag - 3.5) * 2.2)).attr('fill', (d) => quakeColor(d.mag)).attr('fill-opacity', 0.8)
+      .call(bindTip, (d) => `M${d.mag.toFixed(1)} · ${d.place}`, (d) => fmtTime(d.time))
+      .on('click', (e, d) => select('quake', d));
+    placeEvents();
+  }
+  function placeEvents() {
+    g.events.selectAll('rect').each(function (d) {
+      const [x, y] = projection([d.lon, d.lat]); const s = 6 / Math.pow(K, 0.75);
+      this.setAttribute('x', x - s / 2); this.setAttribute('y', y - s / 2); this.setAttribute('width', s); this.setAttribute('height', s);
+      this.setAttribute('transform', `rotate(45 ${x} ${y})`); this.setAttribute('stroke-width', 0.8 / K);
+    });
+  }
+
+  function applyZoomScale() {
+    placeEvents();
+    root.selectAll('circle.pt').attr('r', function () { return Number(this.dataset.r) / Math.pow(K, 0.75); }).attr('stroke-width', 0.8 / K);
+    root.selectAll('circle.pulse').attr('r', 4.5 / K).attr('stroke-width', 1.5 / K);
+    g.waterways.selectAll('g').attr('transform', (d) => { const [x, y] = projection([d.lon, d.lat]); return `translate(${x},${y}) scale(${1 / K})`; });
+    g.hotspots.selectAll('g').attr('transform', (d) => { const [x, y] = projection([d.lon, d.lat]); return `translate(${x},${y}) scale(${1 / K})`; });
+    g.hotspots.selectAll('circle.pt').attr('r', 4.6).attr('stroke-width', 1);
+    g.hotspots.selectAll('circle.pulse').attr('r', 4.5).attr('stroke-width', 1.5);
+  }
+
+  const zoom = d3.zoom().scaleExtent([1, 14]).on('zoom', (e) => {
+    K = e.transform.k;
+    root.attr('transform', e.transform);
+    applyZoomScale();
+    hideTip();
+  });
+  svg.call(zoom).on('dblclick.zoom', null);
+  const zoomTo = (lon0, lat0, lon1, lat1) => {
+    const w = wrap.clientWidth; const h = wrap.clientHeight;
+    const [x0, y0] = projection([lon0, lat1]); const [x1, y1] = projection([lon1, lat0]);
+    const k = Math.max(1, Math.min(14, 0.92 / Math.max((x1 - x0) / w, (y1 - y0) / h)));
+    const t = d3.zoomIdentity.translate(w / 2, h / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+    svg.transition().duration(matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 750).call(zoom.transform, t);
+  };
+  const flyTo = (lon, lat, k = 4) => {
+    const w = wrap.clientWidth; const h = wrap.clientHeight; const [x, y] = projection([lon, lat]);
+    const t = d3.zoomIdentity.translate(w / 2, h / 2).scale(Math.max(K, k)).translate(-x, -y);
+    svg.transition().duration(matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 750).call(zoom.transform, t);
+  };
+  $('zin').onclick = () => svg.transition().duration(300).call(zoom.scaleBy, 1.6);
+  $('zout').onclick = () => svg.transition().duration(300).call(zoom.scaleBy, 1 / 1.6);
+  $('zreset').onclick = () => { setRegion('global'); };
+
+  // Regions (bounding boxes in lon/lat)
+  const REGIONS = [
+    ['global', 'Global', null],
+    ['mideast', 'Middle East', [25, 10, 65, 42]],
+    ['europe', 'Europe', [-12, 34, 45, 66]],
+    ['asia', 'Indo-Pacific', [70, -12, 150, 45]],
+    ['africa', 'Africa', [-20, -36, 55, 30]],
+    ['americas', 'Americas', [-130, -50, -30, 55]],
+  ];
+  const regionBox = $('regions');
+  function setRegion(id) {
+    for (const b of regionBox.children) b.setAttribute('aria-pressed', String(b.dataset.id === id));
+    const r = REGIONS.find((x) => x[0] === id);
+    if (!r[2]) svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity);
+    else zoomTo(...r[2]);
+  }
+  for (const [id, label] of REGIONS) regionBox.append(el('button', { type: 'button', 'data-id': id, 'aria-pressed': String(id === 'global'), text: label, onclick: () => setRegion(id) }));
+
+  // Layer toggles
+  const layerList = $('layer-list');
+  function renderLayerButtons() {
+    layerList.replaceChildren(...LAYERS.map((l) => el('button', {
+      type: 'button', class: 'layer', 'aria-pressed': String(state.layers[l.id]),
+      onclick: () => { state.layers[l.id] = !state.layers[l.id]; renderLayerButtons(); applyLayers(); },
+    }, el('span', { class: 'sw', style: `background:${l.color()}` }), document.createTextNode(l.label), el('span', { class: 'n', text: String(l.count) }))));
+  }
+  function applyLayers() {
+    for (const l of LAYERS) g[l.id === 'zones' ? 'zones' : l.id]?.attr('display', state.layers[l.id] ? null : 'none');
+  }
+  $('all-layers').onclick = () => {
+    const allOn = LAYERS.every((l) => state.layers[l.id]);
+    for (const l of LAYERS) state.layers[l.id] = allOn ? l.on : true;
+    $('all-layers').textContent = allOn ? 'Show all' : 'Defaults';
+    renderLayerButtons(); applyLayers();
+  };
+
+  // ── Selection + detail ─────────────────────────────────────────────────
+  const KIND_LABEL = { quake: 'Earthquake · live', event: 'Natural event · live', hotspot: 'Intel hotspot', conflict: 'Conflict zone', waterway: 'Chokepoint', base: 'Military base', nuclear: 'Nuclear facility', cable: 'Undersea cable', pipeline: 'Pipeline', aidc: 'AI data center', econ: 'Economic center', spaceport: 'Spaceport' };
+  const kv = (pairs) => el('dl', { class: 'kv' }, ...pairs.filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && !v.length)).flatMap(([k, v]) => [el('dt', { text: k }), el('dd', { text: Array.isArray(v) ? v.join(', ') : String(v) })]));
+  const list = (items) => el('ul', {}, ...items.map((t) => el('li', { text: t })));
+  const pips = (n) => { const p = el('span', { class: 'pips', 'aria-label': `Escalation ${n} of 5` }); for (let i = 1; i <= 5; i++) p.append(el('i', { style: i <= n ? `background:var(--${escLevel(n)})` : null })); return p; };
+
+  function markSelected() {
+    root.selectAll('.selected').classed('selected', false);
+    root.selectAll('.selected-line').classed('selected-line', false);
+    if (!state.selected) return;
+    const { kind, item } = state.selected;
+    const layer = { quake: 'quakes', event: 'events', hotspot: 'hotspots', conflict: 'zones', waterway: 'waterways', base: 'bases', nuclear: 'nuclear', cable: 'cables', pipeline: 'pipelines', aidc: 'aidc', econ: 'econ', spaceport: 'space' }[kind];
+    g[layer].selectAll('path, circle.pt, rect.pt').filter((d) => d === item).classed(kind === 'cable' || kind === 'pipeline' ? 'selected-line' : 'selected', true);
+  }
+
+  function select(kind, item, fly = false) {
+    state.selected = { kind, item };
+    $('detail-kind').textContent = KIND_LABEL[kind];
+    const box = $('detail');
+    const nodes = [];
+    if (kind === 'hotspot') {
+      const lvl = escLevel(item._score);
+      nodes.push(el('h3', { text: item.name }), el('div', { class: 'sub', text: [item.subtext, item.location].filter(Boolean).join(' · ') }),
+        el('div', { class: 'chips' }, el('span', { class: `chip ${item._scored ? lvl : 'muted'}`, text: item._scored ? `${escWord[lvl]} ${item._score}/5` : 'Baseline · not scored' }), item.escalationTrend ? el('span', { class: 'chip muted', text: item.escalationTrend }) : null, item.status ? el('span', { class: 'chip muted', text: item.status }) : null),
+        item.description ? el('p', { text: item.description }) : null);
+      if (item.escalationIndicators?.length) nodes.push(el('div', { class: 'label', text: 'Indicators' }), list(item.escalationIndicators));
+      if (item.history) nodes.push(kv([['Last major', item.history.lastMajorEvent], ['Date', item.history.lastMajorEventDate], ['Precedent', item.history.precedentDescription], ['Cycle', item.history.cyclicalRisk]]));
+      if (item.whyItMatters) nodes.push(el('div', { class: 'label', text: 'Why it matters' }), el('p', { text: item.whyItMatters }));
+      if (item.agencies?.length) nodes.push(kv([['Actors', item.agencies]]));
+    } else if (kind === 'conflict') {
+      const lvl = intensityLevel(item.intensity);
+      nodes.push(el('h3', { text: item.name }), el('div', { class: 'sub', text: item.location || '' }),
+        el('div', { class: 'chips' }, el('span', { class: `chip ${lvl}`, text: `${item.intensity} intensity` }), item.startDate ? el('span', { class: 'chip muted', text: `since ${item.startDate}` }) : null),
+        el('p', { text: item.description || '' }),
+        kv([['Parties', item.parties], ['Casualties', item.casualties], ['Displaced', item.displaced]]));
+      if (item.keyDevelopments?.length) nodes.push(el('div', { class: 'label', text: 'Key developments' }), list(item.keyDevelopments));
+    } else if (kind === 'waterway') {
+      nodes.push(el('h3', { text: item.name }), el('p', { text: item.description }), kv([['Position', `${item.lat.toFixed(2)}°, ${item.lon.toFixed(2)}°`]]));
+    } else if (kind === 'base') {
+      nodes.push(el('h3', { text: item.name }), el('div', { class: 'chips' }, el('span', { class: 'chip muted', style: `color:${BASE_COLORS[item.type] || 'inherit'}`, text: BASE_LABELS[item.type] || item.type }), item.status ? el('span', { class: 'chip muted', text: item.status }) : null),
+        kv([['Branch', item.arm], ['Host', item.country]]), item.description ? el('p', { text: item.description }) : null);
+    } else if (kind === 'nuclear') {
+      nodes.push(el('h3', { text: item.name }), kv([['Type', NUKE_LABELS[item.type] || item.type], ['Status', item.status], ['Country', item.operator]]));
+    } else if (kind === 'cable') {
+      nodes.push(el('h3', { text: item.name }), kv([['In service', item.rfsYear], ['Owners', item.owners], ['Landings', (item.landingPoints || []).map((p) => `${p.city}, ${p.countryName}`)]]));
+    } else if (kind === 'pipeline') {
+      nodes.push(el('h3', { text: item.name }), kv([['Carries', item.type], ['Status', item.status], ['Capacity', item.capacity], ['Length', item.length], ['Operator', item.operator], ['Countries', item.countries]]));
+    } else if (kind === 'aidc') {
+      nodes.push(el('h3', { text: item.name }), kv([['Owner', item.owner], ['Country', item.country], ['Status', item.status], ['Chips', item.chipType], ['Chip count', item.chipCount ? Number(item.chipCount).toLocaleString('en-US') : null]]));
+    } else if (kind === 'econ') {
+      nodes.push(el('h3', { text: item.name }), kv([['Type', item.type], ['Country', item.country]]), item.description ? el('p', { text: item.description }) : null);
+    } else if (kind === 'quake') {
+      nodes.push(el('h3', { text: `M${item.mag.toFixed(1)} · ${item.place}` }),
+        el('div', { class: 'chips' }, el('span', { class: `chip ${item.mag >= 6.5 ? 'crit' : item.mag >= 5.5 ? 'high' : 'elev'}`, text: `Magnitude ${item.mag.toFixed(1)}` }), item.tsunami ? el('span', { class: 'chip crit', text: 'Tsunami flag' }) : null, item.alert ? el('span', { class: 'chip muted', text: `PAGER ${item.alert}` }) : null),
+        kv([['Time', fmtTime(item.time)], ['Depth', `${item.depth.toFixed(0)} km`], ['Position', `${item.lat.toFixed(2)}°, ${item.lon.toFixed(2)}°`]]),
+        item.url ? el('a', { href: item.url, target: '_blank', rel: 'noopener noreferrer', text: 'USGS event page' }) : null);
+    } else if (kind === 'event') {
+      nodes.push(el('h3', { text: item.title }), el('div', { class: 'chips' }, el('span', { class: 'chip high', text: item.category })),
+        kv([['Last update', item.date ? fmtTime(item.date) : null], ['Position', `${item.lat.toFixed(2)}°, ${item.lon.toFixed(2)}°`], ['Source', item.source]]),
+        item.link ? el('a', { href: item.link, target: '_blank', rel: 'noopener noreferrer', text: 'NASA EONET record' }) : null);
+    } else if (kind === 'spaceport') {
+      nodes.push(el('h3', { text: item.name }), kv([['Operator', item.operator], ['Country', item.country], ['Status', item.status], ['Launch rate', item.launches]]));
+    }
+    box.replaceChildren(...nodes.filter(Boolean));
+    const live = kind === 'quake' || kind === 'event';
+    $('ai-target').textContent = live ? 'AI briefs cover World Monitor\'s curated layers. Pick a conflict, hotspot, base or other mapped site.' : `Briefing target: ${item.name} (${KIND_LABEL[kind].toLowerCase()})`;
+    $('ai-run').disabled = live;
+    markSelected();
+    if (fly) {
+      if (kind === 'conflict') {
+        const b = d3.geoBounds(ring(item.coords));
+        zoomTo(b[0][0] - 2, b[0][1] - 2, b[1][0] + 2, b[1][1] + 2);
+      } else if (item.lat != null) flyTo(item.lon, item.lat, 4);
+    }
+  }
+
+  // ── Widgets ────────────────────────────────────────────────────────────
+  const hot = [...DATA.INTEL_HOTSPOTS].sort((a, b) => b._score - a._score || Number(b._scored) - Number(a._scored) || a.name.localeCompare(b.name));
+  const conflicts = [...DATA.CONFLICT_ZONES].sort((a, b) => ['high', 'medium', 'low'].indexOf(a.intensity) - ['high', 'medium', 'low'].indexOf(b.intensity));
+
+  const stats = [
+    [conflicts.filter((c) => c.intensity === 'high').length, 'High-intensity conflicts', 'crit'],
+    [hot.filter((h) => h._score >= 4).length, 'Hotspots at 4+', 'high'],
+    [DATA.STRATEGIC_WATERWAYS.length, 'Chokepoints watched', ''],
+    [DATA.MILITARY_BASES.length, 'Bases tracked', ''],
+  ];
+  $('stats').replaceChildren(...stats.map(([v, k, c]) => el('div', { class: 'stat' }, el('div', { class: `v ${c}`, text: String(v) }), el('div', { class: 'k', text: k }))));
+
+  $('hotspots').replaceChildren(...hot.map((h) => el('button', { type: 'button', class: 'row', onclick: () => { if (!state.layers.hotspots) { state.layers.hotspots = true; renderLayerButtons(); applyLayers(); } select('hotspot', h, true); } },
+    el('span', { class: 'row-title', text: h.name }), h._scored ? pips(h._score) : el('span', { class: 'label', text: 'baseline' }),
+    el('span', { class: 'row-sub', text: [h.subtext, h.escalationTrend].filter(Boolean).join(' · ') }))));
+
+  $('conf-count').textContent = `${conflicts.length} zones`;
+  $('conflicts').replaceChildren(...conflicts.map((c) => el('button', { type: 'button', class: 'row', onclick: () => { if (!state.layers.zones) { state.layers.zones = true; renderLayerButtons(); applyLayers(); } select('conflict', c, true); } },
+    el('span', { class: 'row-title', text: c.name }), el('span', { class: `chip ${intensityLevel(c.intensity)}`, text: c.intensity }),
+    el('span', { class: 'row-sub', text: [c.parties?.slice(0, 3).join(' · '), c.startDate ? `since ${c.startDate}` : null].filter(Boolean).join(' — ') }))));
+
+  $('choke-count').textContent = `${DATA.STRATEGIC_WATERWAYS.length} straits`;
+  $('chokepoints').replaceChildren(...DATA.STRATEGIC_WATERWAYS.map((w) => el('button', { type: 'button', class: 'row', onclick: () => { if (!state.layers.waterways) { state.layers.waterways = true; renderLayerButtons(); applyLayers(); } select('waterway', w, true); } },
+    el('span', { class: 'row-title', text: w.name.replace(/\b\w+/g, (s) => s[0] + s.slice(1).toLowerCase()) }), el('span', { class: 'label', text: `${w.lat.toFixed(1)}°, ${w.lon.toFixed(1)}°` }),
+    el('span', { class: 'row-sub', text: w.description }))));
+
+  const bars = (target, rows) => {
+    const max = Math.max(...rows.map((r) => r[1]));
+    $(target).replaceChildren(...rows.map(([name, n, color]) => el('div', { class: 'bar' },
+      el('span', { class: 'name', text: name, title: name }),
+      el('span', { class: 'track' }, el('span', { class: 'fill', style: `display:block;width:${(n / max) * 100}%;background:${color}` })),
+      el('span', { class: 'num', text: String(n) }))));
+  };
+  const byType = (arr, key) => arr.reduce((a, x) => ((a[x[key]] = (a[x[key]] || 0) + 1), a), {});
+  bars('bases-bars', Object.entries(byType(DATA.MILITARY_BASES, 'type')).sort((a, b) => b[1] - a[1]).map(([t, n]) => [BASE_LABELS[t] || t, n, BASE_COLORS[t] || '#888888']));
+  const nukes = Object.entries(byType(DATA.NUCLEAR_FACILITIES, 'type')).sort((a, b) => b[1] - a[1]).map(([t, n]) => [NUKE_LABELS[t] || t, n, t === 'plant' || t === 'research' ? '#b45fd6' : '#c0392b']);
+  const dc = byType(DATA.AI_DATA_CENTERS, 'status');
+  bars('nuke-bars', [...nukes, ['AI DC, built', dc.existing || 0, '#16a3a3'], ['AI DC, planned', dc.planned || 0, '#7fd3d3']]);
+
+  // ── Live feeds (fetched by the browser from public APIs) ───────────────
+  const feedState = { quakes: null, events: null, crypto: null };
+  const OFFLINE_FEEDS = [
+    ['Breaking news', 'Hundreds of RSS sources, clustered and classified by AI'],
+    ['Military aviation', 'ADS-B flights and theater posture'],
+    ['Maritime', 'AIS vessel traffic and chokepoint flows'],
+  ];
+  function renderFeeds() {
+    const row = (title, status, cls, sub) => el('div', { class: 'feed' }, el('b', { text: title }), el('span', { class: `chip ${cls}`, text: status }), el('span', { class: 'src', text: sub }));
+    const q = feedState.quakes; const e = feedState.events; const c = feedState.crypto;
+    const rows = [
+      q == null ? row('Earthquakes', 'Loading', 'muted', 'USGS, magnitude 4.5 and above, last 7 days')
+        : q.ok ? row('Earthquakes', `${LIVE.quakes.length} live`, 'low', `USGS · strongest M${Math.max(...LIVE.quakes.map((x) => x.mag), 0).toFixed(1)}`)
+          : row('Earthquakes', 'Unavailable', 'crit', `USGS did not answer (${q.error})`),
+      e == null ? row('Natural events', 'Loading', 'muted', 'NASA EONET open events, last 30 days')
+        : e.ok ? row('Natural events', `${LIVE.events.length} live`, 'low', `NASA EONET · ${[...new Set(LIVE.events.map((x) => x.category))].slice(0, 3).join(', ')}`)
+          : row('Natural events', 'Unavailable', 'crit', `NASA EONET did not answer (${e.error})`),
+      c == null ? row('Crypto markets', 'Loading', 'muted', 'CoinGecko spot prices')
+        : c.ok ? row('Crypto markets', 'Live', 'low', c.text)
+          : row('Crypto markets', 'Unavailable', 'crit', `CoinGecko did not answer (${c.error})`),
+      ...OFFLINE_FEEDS.map(([t2, s]) => row(t2, 'Full stack', 'muted', s)),
+    ];
+    $('feeds').replaceChildren(...rows);
+    const anyLive = [q, e, c].some((x) => x?.ok);
+    const chip = $('status-chip');
+    chip.textContent = anyLive ? 'Live · curated layers + USGS / NASA feeds' : [q, e, c].every((x) => x) ? 'Curated layers · live feeds unavailable' : 'Connecting live feeds';
+    chip.classList.toggle('live', anyLive);
+    $('feeds-updated').textContent = anyLive ? `Updated ${new Date().toUTCString().slice(17, 22)} UTC` : '';
+  }
+  function renderQuakeList() {
+    const box = $('quakes');
+    if (!feedState.quakes?.ok) { box.replaceChildren(el('p', { class: 'empty', text: feedState.quakes ? 'USGS feed unavailable right now.' : 'Loading earthquakes…' })); return; }
+    const top = [...LIVE.quakes].sort((a, b) => b.mag - a.mag).slice(0, 8);
+    box.replaceChildren(...top.map((qk) => el('button', { type: 'button', class: 'row', onclick: () => { if (!state.layers.quakes) { state.layers.quakes = true; renderLayerButtons(); applyLayers(); } select('quake', qk, true); } },
+      el('span', { class: 'row-title', text: qk.place }), el('span', { class: `chip ${qk.mag >= 6.5 ? 'crit' : qk.mag >= 5.5 ? 'high' : 'elev'}`, text: `M${qk.mag.toFixed(1)}` }),
+      el('span', { class: 'row-sub', text: `${fmtTime(qk.time)} · ${qk.depth.toFixed(0)} km deep${qk.tsunami ? ' · tsunami flag' : ''}` }))));
+  }
+  const errText = (err) => (err?.name === 'TimeoutError' ? 'timed out' : err?.message || 'network error');
+  async function getJson(url) {
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+  async function loadQuakes() {
+    try {
+      const j = await getJson('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson');
+      LIVE.quakes = (j.features || []).filter((f) => f?.geometry?.coordinates && typeof f.properties?.mag === 'number').map((f) => ({
+        id: f.id, mag: f.properties.mag, place: f.properties.place || 'Unknown location', time: new Date(f.properties.time).toISOString(),
+        lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], depth: f.geometry.coordinates[2] ?? 0,
+        tsunami: f.properties.tsunami === 1, alert: f.properties.alert, url: f.properties.url,
+      }));
+      feedState.quakes = { ok: true };
+    } catch (err) { feedState.quakes = { ok: false, error: errText(err) }; }
+  }
+  async function loadEvents() {
+    try {
+      const j = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=30');
+      LIVE.events = (j.events || []).map((ev) => {
+        const geo = ev.geometry?.at(-1);
+        let c = geo?.coordinates;
+        while (Array.isArray(c?.[0])) c = c[0];
+        if (!Array.isArray(c) || typeof c[0] !== 'number') return null;
+        return { id: ev.id, title: ev.title, category: ev.categories?.[0]?.title || 'Event', date: geo.date, lon: c[0], lat: c[1], link: ev.link, source: ev.sources?.map((s) => s.id).join(', ') };
+      }).filter(Boolean);
+      feedState.events = { ok: true };
+    } catch (err) { feedState.events = { ok: false, error: errText(err) }; }
+  }
+  async function loadCrypto() {
+    try {
+      const j = await getJson('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true');
+      const fmt = (name, sym) => {
+        const v = j[name]; if (!v) return null;
+        const ch = v.usd_24h_change;
+        return `${sym} $${Number(v.usd).toLocaleString('en-US', { maximumFractionDigits: v.usd > 100 ? 0 : 2 })}${typeof ch === 'number' ? ` (${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%)` : ''}`;
+      };
+      const text = [fmt('bitcoin', 'BTC'), fmt('ethereum', 'ETH'), fmt('solana', 'SOL')].filter(Boolean).join(' · ');
+      feedState.crypto = text ? { ok: true, text } : { ok: false, error: 'empty answer' };
+    } catch (err) { feedState.crypto = { ok: false, error: errText(err) }; }
+  }
+  async function refreshLive() {
+    await Promise.all([loadQuakes(), loadEvents(), loadCrypto()]);
+    LAYERS.find((l) => l.id === 'quakes').count = LIVE.quakes.length;
+    LAYERS.find((l) => l.id === 'events').count = LIVE.events.length;
+    renderLayerButtons();
+    drawLive();
+    applyZoomScale();
+    applyLayers();
+    markSelected();
+    renderFeeds();
+    renderQuakeList();
+  }
+  renderFeeds();
+
+  // ── AI analyst (live, via the viewer's Claude) ─────────────────────────
+  let ctl = null;
+  const aiOut = $('ai-out');
+  $('ai-run').onclick = async () => {
+    if (!state.selected || state.selected.kind === 'quake' || state.selected.kind === 'event') return;
+    const { kind, item } = state.selected;
+    ctl = new AbortController();
+    $('ai-run').disabled = true; $('ai-stop').disabled = false;
+    aiOut.textContent = 'Writing the brief…';
+    try {
+      const r = await fetch(`/api/brief?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(item.id)}`, { signal: ctl.signal });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok) {
+        aiOut.textContent = body.text;
+        $('ai-provider').textContent = body.model ? `AI · ${body.model}` : 'AI brief';
+      } else if (r.status === 503 && body.error === 'no_ai') {
+        aiOut.textContent = 'No AI is connected to this site yet. The owner adds one in Vercel → Project → Settings → Environment Variables: ANTHROPIC_API_KEY, or AI_BASE_URL + AI_API_KEY + AI_MODEL for any OpenAI-compatible AI (World Monitor AI Port, OpenRouter, Groq, Gemini, OpenAI). Then redeploy.';
+      } else {
+        aiOut.textContent = body.error || `The brief did not arrive (HTTP ${r.status}). Try again in a minute.`;
+      }
+    } catch (e) {
+      aiOut.textContent = e?.name === 'AbortError' ? 'Stopped.' : 'The brief did not arrive. Check your connection and try again.';
+    } finally {
+      $('ai-run').disabled = false; $('ai-stop').disabled = true;
+    }
+  };
+  $('ai-stop').onclick = () => ctl?.abort();
+
+  // ── Boot ───────────────────────────────────────────────────────────────
+  renderLayerButtons();
+  draw();
+  select('conflict', conflicts[0]);
+  refreshLive();
+  setInterval(() => { if (!document.hidden) refreshLive(); }, 5 * 60 * 1000);
+  if (matchMedia('(max-width: 560px)').matches) $('layers-panel').open = false;
+  let resizeTimer;
+  new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { const t = d3.zoomTransform(svg.node()); draw(); root.attr('transform', t); }, 120); }).observe(wrap);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</body>
+</html>

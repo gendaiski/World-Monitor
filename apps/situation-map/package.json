@@ -1,0 +1,17 @@
+{
+  "name": "worldmonitor-situation-map",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone World Monitor situation map: curated intelligence layers, live USGS and NASA feeds, and an AI analyst.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1"
+  },
+  "license": "AGPL-3.0-only"
+}

@@ -22,8 +22,8 @@ jobs:
   audit-lockfile:
     name: audit-lockfile
     runs-on: ubuntu-latest
-    # Eight bounded audits plus setup and verdict upload.
-    timeout-minutes: 85
+    # Nine bounded audits plus setup and verdict upload.
+    timeout-minutes: 95
     env:
       # Authenticate advisory lookups used to date findings for the grace clock.
       GITHUB_TOKEN: ${{ github.token }}
@@ -106,6 +106,17 @@ jobs:
             --workspace "ai-port" \
             --package-json "ai-port/package.json" \
             --lockfile "ai-port/package-lock.json"
+      - name: Audit apps/situation-map/package-lock.json
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        env:
+          AUDIT_STATUS_FILE: ${{ runner.temp }}/audit-status/situation-map.txt
+        run: |
+          mkdir -p "${{ runner.temp }}/audit-status"
+          node .github/scripts/audit-production-dependencies.mjs \
+            --workspace "apps/situation-map" \
+            --package-json "apps/situation-map/package.json" \
+            --lockfile "apps/situation-map/package-lock.json"
       - name: Audit docker/runtime-package-lock.json
         if: ${{ !cancelled() }}
         timeout-minutes: 10
@@ -191,7 +202,7 @@ jobs:
           RUST_RESULT: ${{ needs.audit-rust.result }}
           # Names must match the audit-lockfile steps exactly; the
           # ci-workflow-coverage test asserts they do.
-          AUDIT_NAMES: 'root scripts consumer-prices-core blog-site pro-test ai-port docker-runtime railway-reconcile-control'
+          AUDIT_NAMES: 'root scripts consumer-prices-core blog-site pro-test ai-port situation-map docker-runtime railway-reconcile-control'
           FAIL_ON_OUTAGE: ${{ github.event_name == 'schedule' && '1' || '0' }}
         run: |
           # On a run this workflow's concurrency group evicted (#8443), this
