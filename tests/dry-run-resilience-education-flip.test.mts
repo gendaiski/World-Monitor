@@ -430,7 +430,7 @@ function buildSyntheticAcceptanceArtifact(harnessCommitSha: string, harnessSha25
   };
 }
 
-test('any committed education acceptance artifacts are internally consistent', () => {
+test('any committed education acceptance artifacts are internally consistent', (t) => {
   // PREREQUISITE (local clones only): the capture provenance validates the
   // harness AT its recorded commit (`git show <sha>:scripts/…` + sha256), and
   // captures were made on PR branches that are squash-merged — the original
@@ -439,6 +439,14 @@ test('any committed education acceptance artifacts are internally consistent', (
   // (actions/checkout uses fetch-depth: 0). If this test fails with
   // "exists on disk, but not in '<sha>'", run:
   //   git fetch origin '+refs/pull/*/head:refs/remotes/origin/pr/*'
+  // A fork's CI has no access to upstream's pull-request refs, so the recorded
+  // harness commits can never resolve there; upstream CI and local clones still
+  // validate the provenance in full.
+  const ciRepository = process.env.GITHUB_REPOSITORY;
+  if (ciRepository && ciRepository !== 'koala73/worldmonitor') {
+    t.skip(`capture provenance pins upstream pull-request commits that ${ciRepository} cannot fetch`);
+    return;
+  }
   for (const { filename, artifact } of readEducationAcceptanceArtifacts()) {
     const validation = validateEducationAcceptanceArtifact(artifact, { filename });
     assert.equal(validation.verdict, 'PASS');
