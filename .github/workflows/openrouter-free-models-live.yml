@@ -43,6 +43,8 @@ permissions:
 
 jobs:
   live-listing:
+    # Upstream operations job: forks skip it (gendaiski/World-Monitor has no upstream infrastructure or secrets).
+    if: github.repository == 'koala73/worldmonitor'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

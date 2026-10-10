@@ -31,6 +31,8 @@ permissions:
 
 jobs:
   unit-test:
+    # Upstream operations job: forks skip it (gendaiski/World-Monitor has no upstream infrastructure or secrets).
+    if: github.repository == 'koala73/worldmonitor'
     name: Unit tests
     runs-on: ubuntu-latest
     defaults:

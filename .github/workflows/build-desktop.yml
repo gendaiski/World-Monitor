@@ -36,6 +36,8 @@ env:
 
 jobs:
   client-env:
+    # Upstream operations job: forks skip it (gendaiski/World-Monitor has no upstream infrastructure or secrets).
+    if: github.repository == 'koala73/worldmonitor'
     permissions:
       contents: read
     runs-on: ubuntu-latest

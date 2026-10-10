@@ -629,12 +629,14 @@ describe('live cache sweep deployment timing', () => {
       ['schedule', '', '', '', true],
       ['workflow_dispatch', '', '', '', true],
     ]) {
-      const github = { event_name: event, event: event === 'deployment_status' ? {
+      const github = { repository: 'koala73/worldmonitor', event_name: event, event: event === 'deployment_status' ? {
         deployment_status: { state },
         deployment: { environment, creator: { login: creator } },
       } : {} };
       assert.equal(runInNewContext(job.if, { github }, { timeout: 1000 }), expected, `${event}/${state}/${environment}/${creator}`);
     }
+    // Forks have none of the production infrastructure this sweep probes.
+    assert.equal(runInNewContext(job.if, { github: { repository: 'gendaiski/World-Monitor', event_name: 'schedule', event: {} } }, { timeout: 1000 }), false);
     assert.equal(workflow.concurrency, undefined);
     assert.equal(job.concurrency['cancel-in-progress'], false);
     // Keyed on the deployment environment, as in mcp-live-smoke: one shared group

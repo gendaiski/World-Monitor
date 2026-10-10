@@ -438,6 +438,8 @@ Runs before every `git push`:
 | `publish-go.yml` | `sdk/go/v*` tag, manual | Vets/tests the Go SDK module (`sdk/go/`) at the tag and warms proxy.golang.org so the version is go-gettable and indexed on pkg.go.dev |
 | `publish-mcp-registry.yml` | Push to main (manifest inputs), daily cron, published release, manual | Derives the public MCP Registry manifest from the server card, validates it with the pinned publisher, and publishes it through the `mcp-registry-publish` environment; publication is idempotent and fails closed when a published version's payload changed |
 | `test-linux-app.yml` | Twice-weekly schedule (Mon/Thu 05:23 UTC), manual | Desktop Canary (Linux): installed-app build + launch, hard-fails on crashed app, unreachable sidecar, or blank render (#5902) |
+| `ai-port.yml` | PR and push to main touching `ai-port/` | Unit and mock-upstream tests for the AI Port gateway (routing, fallback, Anthropic translation, streaming, subscription CLI bridge, key storage) |
+| `situation-map.yml` | PR and push to main touching `apps/situation-map/` | Tests for the standalone situation map's `/api/brief` AI endpoint |
 
 The Railway `umami` runtime is built from `Dockerfile.umami`, which pins the
 upstream v3.2.0 release and applies the reviewed session-data upsert fix.
