@@ -2,6 +2,8 @@
 
 WorldMonitor is a real-time global intelligence dashboard for geopolitics, military activity, markets, climate, cyber threats, maritime traffic, and aviation. A TypeScript browser app uses Vercel Edge APIs, Railway data workers, and Upstash Redis. Tauri adds a desktop app and Node.js sidecar.
 
+This repository is the `gendaiski/World-Monitor` fork. Read [HANDOFF.md](HANDOFF.md) first for its state, links and task backlog.
+
 ## Own the outcome
 
 - Treat reports of broken behavior and requests to debug, investigate, diagnose, or "figure out" a failure as requests to resolve it. Prove the cause, make a scoped repair when warranted, verify it, and deliver a ready PR. Do not require the user to say "fix" again.
