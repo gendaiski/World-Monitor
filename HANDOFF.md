@@ -257,7 +257,8 @@ The streams are the `NEWS` and `CAMS` lists in `apps/situation-map/index.html`, 
 | World Monitor (upstream app, imported whole) | In the repo, unchanged except fork wiring | Docker host via `./scripts/install-worldmonitor.sh` |
 | AI Port (connect any AI by API key or subscription) | Done, 16 tests passing, CI workflow `ai-port.yml` | Docker service `ai-port` on 127.0.0.1:8787 |
 | One-command installer | Done | Any Docker host |
-| Situation map (standalone, worldmonitor.app style) | Done and pushed (`3159050`). **Vercel still serves the old design**: see task T1 | Vercel project `world-monitor-situation-map`; also the Claude artifact |
+| **Original World Monitor web app (the real worldmonitor.app interface)** | Builds on the fork with `npm run build:fork` (section 5a). **Not deployed yet**: Vercel access is blocked, see task T0 | Vercel, from the repository root (new project), exactly like worldmonitor.app |
+| Situation map (standalone lookalike, superseded by the original app) | Done and pushed (`3159050`). Vercel still serves the older design | Vercel project `world-monitor-situation-map`; also the Claude artifact |
 | Fork CI | Green; upstream-only operations jobs skip on the fork | GitHub Actions |
 | Dependabot | Removed on the fork | — |
 
@@ -363,6 +364,72 @@ curl http://localhost:8787/v1/chat/completions \
 
 - **Development:** `cd ai-port && npm ci && npm test`. Run it locally with `AI_PORT_TOKEN=dev AI_PORT_ADMIN_TOKEN=dev GROQ_API_KEY=… npm start`.
 
+## 5a. Original interface on Vercel (the real World Monitor app)
+
+The repository root is the complete original World Monitor web app: the same code that runs worldmonitor.app. It includes:
+
+- the Vite frontend in `src/`;
+- 175 Vercel functions in `api/` (mostly Edge);
+- `middleware.ts` and `vercel.json`.
+
+Deploying the repository root to Vercel gives exactly the original interface:
+
+- the header with variant switcher, MISSION, Search, Link and Embed;
+- the "Global Situation" map with 2D/3D, time range, layer toggles and legend;
+- Live News, Live Webcams, AI Insights and the full panel grid;
+- mobile tabs and the footer.
+
+This is the way to get "the same user interface". The `apps/situation-map` page is only a lookalike.
+
+**Build command.** `vercel.json` uses `npm run build:fork`. It is identical to upstream's `build:full` except that it skips two steps:
+
+- `build:crawlable-corpus`, the static SEO pages behind the Countries, Chokepoints and Crises footer links;
+- `build:sitemap`.
+
+The corpus build refuses a live-pulse snapshot older than 10 days (`docs/snapshots/crawlable-live-pulse-*.json`). Refreshing that snapshot requires upstream's API and its private `WORLDMONITOR_API_KEY` (workflow `crawlable-pulse-refresh.yml`), so on the fork the full build always fails after 10 days. On the fork, those footer links have no generated pages.
+
+**Verified locally on Node 24.** `npm run build:fork` exits 0 and writes `dist/` (71 MB: dashboard, variant dashboards, blog, /pro, embed, plugin, OpenAPI). The original UI was also driven in headless Chromium from `vite` dev:
+
+- 1440×900: header, map with hotspots and conflict zones, layer toggles, legend, Live News, Live Webcams and footer.
+- 390×844: mobile tabs.
+
+**Deploying (task T0).** Create a new Vercel project from `gendaiski/World-Monitor` with these settings:
+
+- Root Directory empty (repository root)
+- Framework Preset Vite
+- Output Directory `dist`
+- Node.js 24.x
+- Install `npm ci`
+
+The build command comes from `vercel.json`. Through the API:
+
+```json
+{ "name": "world-monitor", "target": "production",
+  "gitSource": { "type": "github", "org": "gendaiski", "repo": "World-Monitor", "ref": "main", "sha": "<full 40-char sha>" },
+  "projectSettings": { "framework": "vite", "rootDirectory": null, "outputDirectory": "dist", "installCommand": "npm ci", "nodeVersion": "24.x" } }
+```
+
+Possible plan limits to watch on the first deploy:
+
+- 175 functions per deployment;
+- 5 Edge functions declare `regions: ['iad1','lhr1','fra1','sfo1']`, and Hobby allows one region;
+- build time.
+
+If Vercel rejects the deploy, record the exact error here before changing anything.
+
+**Data.** The frontend calls `/api/*` on its own origin (`src/services/runtime.ts`: no `VITE_WS_API_URL`, and the host is not worldmonitor.app). That means the fork's own functions answer, not worldmonitor.app's. Upstream's API accepts only its own origins (`api/_cors.js`) or a paid `X-WorldMonitor-Key`, so it cannot be borrowed.
+
+| Without Redis | With Redis and seeders |
+|---|---|
+| Functions that fetch public sources directly return live data (`cachedFetchJson` skips the cache when `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` are unset) | Every panel fills |
+| `/api/bootstrap` and Redis-seeded panels show "unavailable" | — |
+
+For full data, add an Upstash Redis database: in Vercel → Storage → Upstash, or at https://console.upstash.com. Then:
+
+1. Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` on the project. The Vercel integration may name them `KV_REST_API_URL`/`KV_REST_API_TOKEN`; copy the values into the `UPSTASH_*` names.
+2. Run the seeders against that database (`scripts/run-seeders.sh`, from a Docker host or a scheduled job; see SELF_HOSTING.md "Seeding Data").
+3. Optional provider keys are listed in `.env.example`, and the AI Port covers the LLM features (section 4).
+
 ## 5. Situation map (`apps/situation-map`)
 
 A self-contained page plus one Vercel function. It is styled after the real World Monitor dashboard; the visual references are `src/styles/main.css`, `src/components/Map.ts` and `src/config/panels.ts`.
@@ -449,7 +516,17 @@ AI env vars on Vercel:
 
 Tasks marked **OWNER** need the repository or Vercel owner; an agent cannot do them without credentials. Do the rest in order.
 
-**T1 — OWNER: put the new design on Vercel.**
+**T0 — Deploy the original World Monitor app (the real interface) to Vercel.**
+
+- **OWNER part:** grant the Vercel connection access to team `gendaiski`. The approval link is single-use and expires in 10 minutes; ask Claude for a fresh one. Or deploy from the Vercel dashboard: New Project → import `gendaiski/World-Monitor` with the settings in section 5a.
+- **Agent part:** create the deployment with the settings in section 5a and watch the build.
+- *Done when:*
+  - the production URL shows the original header (WORLD pill, MONITOR, LIVE, region, MISSION, Search);
+  - "Global Situation" has the 2D/3D map, and Live News and Live Webcams are beside it;
+  - news or live-fetching panels fill.
+- **Then:** add Upstash Redis plus seeders for the remaining panels (section 5a, "Data").
+
+**T1 — OWNER: put the newer situation-map design on Vercel (optional once T0 is live).**
 
 - Open https://vercel.com/gendaiski/world-monitor-situation-map/deployments and use Redeploy or Create Deployment from the latest `main`.
 - Or, with the CLI: `cd apps/situation-map && vercel link` (choose `world-monitor-situation-map`), then `vercel deploy --prod`.
@@ -542,6 +619,9 @@ Headless Chromium results for the situation map:
 | The Vercel connector used by Claude lost access to the `gendaiski` team (HTTP 403) after `e65d924` was deployed | Open; owner action T1 |
 | worldmonitor.app was unreachable from the sandbox (DNS blocked) | Took the style from the repo's own frontend code and an earlier screenshot of the running app |
 | Map legend overlapped layer toggles on narrow maps; Middle East conflict labels overlapped | Container query moves the legend; labels are decluttered by intensity at each zoom |
+| `npm run build:full` fails on the fork: `docs/snapshots/crawlable-live-pulse-2026-10-05.json is 30 days old (max 10)`. Only upstream can refresh it (needs its private API key) | Added `build:fork` (build:full minus the corpus and sitemap steps) and pointed `vercel.json` `buildCommand` at it |
+| WebMCP origin-trial tokens in `vercel.json` expired within 14 days, failing `tests/deploy-config.test.mjs` (and CI) by date alone | Ported upstream `b9b05f3d` ("renew origin-trial tokens for all six origins") |
+| A `git fetch --depth=…` of upstream made the clone shallow; `generate-docs-page-dates.mjs` then refused to run | Removed the upstream remote and `.git/shallow`. Fetch upstream without `--depth` |
 
 ## 10. Secrets and configuration inventory (names only)
 
@@ -570,6 +650,8 @@ Expect conflicts in the following places:
 - The guarded workflow files: keep the guard, and add it to any new upstream ops job.
 - `scripts/regional-snapshot/narrative.mjs` and `scripts/weekly-brief.mjs`: keep `aiPortChainEntry` last in `DEFAULT_PROVIDERS`.
 - `scripts/railway-services.json`.
+- `vercel.json` and `package.json`: keep `"buildCommand": "npm run build:fork"` and the `build:fork`/`prebuild:fork` scripts. If upstream changes `build:full`, mirror the change in `build:fork`, minus the corpus and sitemap steps.
+- Fetch upstream with full history (no `--depth`), or the docs-date generator fails on a shallow clone.
 - `shared/source-attribution-manifest.json`: regenerate it with `--write`; do not hand-merge.
 
 After merging, run:
