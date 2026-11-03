@@ -622,6 +622,8 @@ Headless Chromium results for the situation map:
 | `npm run build:full` fails on the fork: `docs/snapshots/crawlable-live-pulse-2026-10-05.json is 30 days old (max 10)`. Only upstream can refresh it (needs its private API key) | Added `build:fork` (build:full minus the corpus and sitemap steps) and pointed `vercel.json` `buildCommand` at it |
 | WebMCP origin-trial tokens in `vercel.json` expired within 14 days, failing `tests/deploy-config.test.mjs` (and CI) by date alone | Ported upstream `b9b05f3d` ("renew origin-trial tokens for all six origins") |
 | A `git fetch --depth=…` of upstream made the clone shallow; `generate-docs-page-dates.mjs` then refused to run | Removed the upstream remote and `.git/shallow`. Fetch upstream without `--depth` |
+| By 2026-11-03, about 66 unit tests (crawlable corpus, SEO, sitemap, research, use-cases, schema graph and more) failed by date alone: they build the corpus from the newest committed live-pulse snapshot, and it was more than 10 days old. Porting upstream's 2026-11-02 snapshot does not fit the fork's older code (new fields `liveTopics` and `publishedByDomain`, CII methodology v8) | `scripts/build-crawlable-corpus.mjs` applies the 10-day age fuse only when `GITHUB_REPOSITORY` is unset (local) or is `koala73/worldmonitor`. Fork CI still runs every corpus test, against the committed snapshot. A full upstream sync (T8) brings fresh snapshots and removes the need |
+| `tests/stock-dividend-profile.test.mts` "non-zero CAGR for a quarterly payer" failed depending on the current date | Ported upstream's date-safe version of the test (`makeCalendarQuartersThroughNow`) |
 
 ## 10. Secrets and configuration inventory (names only)
 

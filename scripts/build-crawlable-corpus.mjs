@@ -482,7 +482,13 @@ export function resolveLatestLivePulseSnapshotPath(rootDir = DEFAULT_ROOT) {
     throw new Error(`${relativePath} is missing required live-pulse sections`);
   }
   const ageDays = livePulseSnapshotAgeDays(snapshot.capturedAt);
-  if (ageDays > MAX_LIVE_PULSE_SNAPSHOT_AGE_DAYS) {
+  // Only koala73/worldmonitor can refresh the snapshot (its weekly
+  // crawlable-pulse-refresh job needs upstream's API key), and forks deploy
+  // with build:fork, which does not publish these pages. So the age fuse
+  // applies to upstream CI and local builds, not to a fork's CI.
+  const forkCi = Boolean(process.env.GITHUB_REPOSITORY)
+    && process.env.GITHUB_REPOSITORY !== 'koala73/worldmonitor';
+  if (ageDays > MAX_LIVE_PULSE_SNAPSHOT_AGE_DAYS && !forkCi) {
     throw new Error(
       `${relativePath} is ${Math.round(ageDays)} days old (max ${MAX_LIVE_PULSE_SNAPSHOT_AGE_DAYS}); `
       + 'run `npm run freeze:crawlable-live-pulse` to republish current values',
