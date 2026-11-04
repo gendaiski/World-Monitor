@@ -132,6 +132,22 @@ You are continuing work on github.com/gendaiski/World-Monitor (a fork of koala73
 | Upstream commits | https://github.com/koala73/worldmonitor/commits/main |
 | Upstream live site (visual reference) | https://www.worldmonitor.app |
 
+### Vercel: original World Monitor app (main site)
+
+- **Team:** `gendaiski`, id `team_6EOWs9KFetQQNpHUN2XlEuXK`.
+- **Project:** `world-monitor`, id `prj_5pNEqelJPOCAzdgbFNzcFBzoOqh3` (Vite, Output `dist`, Node 24.x, repository root).
+- **First deployment:** `dpl_FWgeb6FjvMmJVKyPjJmcGB8Q4qPY`, built from `f54ca9b`.
+
+| What | URL |
+|---|---|
+| Production alias | https://world-monitor-gendaiski.vercel.app |
+| Alias (git main) | https://world-monitor-git-main-gendaiski.vercel.app |
+| First deployment URL | https://world-monitor-fkd2vkqdr-gendaiski.vercel.app |
+| Project dashboard | https://vercel.com/gendaiski/world-monitor |
+| Settings: Git (connect for auto-deploys) | https://vercel.com/gendaiski/world-monitor/settings/git |
+| Settings: Environment Variables (Redis, keys) | https://vercel.com/gendaiski/world-monitor/settings/environment-variables |
+| Settings: Deployment Protection | https://vercel.com/gendaiski/world-monitor/settings/deployment-protection |
+
 ### Vercel (situation map hosting)
 
 - **Team:** `gendaiski`, id `team_6EOWs9KFetQQNpHUN2XlEuXK`.
@@ -257,7 +273,7 @@ The streams are the `NEWS` and `CAMS` lists in `apps/situation-map/index.html`, 
 | World Monitor (upstream app, imported whole) | In the repo, unchanged except fork wiring | Docker host via `./scripts/install-worldmonitor.sh` |
 | AI Port (connect any AI by API key or subscription) | Done, 16 tests passing, CI workflow `ai-port.yml` | Docker service `ai-port` on 127.0.0.1:8787 |
 | One-command installer | Done | Any Docker host |
-| **Original World Monitor web app (the real worldmonitor.app interface)** | Builds on the fork with `npm run build:fork` (section 5a). **Not deployed yet**: Vercel access is blocked, see task T0 | Vercel, from the repository root (new project), exactly like worldmonitor.app |
+| **Original World Monitor web app (the real worldmonitor.app interface)** | Builds on the fork with `npm run build:fork`, and the Vercel build succeeds. **The deploy is refused on the Hobby plan** (175 functions > 12); needs Pro or the Docker host, see section 5a and task T0 | Vercel project `world-monitor` (Pro), or any Docker host |
 | Situation map (standalone lookalike, superseded by the original app) | Done and pushed (`3159050`). Vercel still serves the older design | Vercel project `world-monitor-situation-map`; also the Claude artifact |
 | Fork CI | Green; upstream-only operations jobs skip on the fork | GitHub Actions |
 | Dependabot | Removed on the fork | — |
@@ -409,13 +425,17 @@ The build command comes from `vercel.json`. Through the API:
   "projectSettings": { "framework": "vite", "rootDirectory": null, "outputDirectory": "dist", "installCommand": "npm ci", "nodeVersion": "24.x" } }
 ```
 
-Possible plan limits to watch on the first deploy:
+**First deploy result (2026-11-03, `dpl_FWgeb6FjvMmJVKyPjJmcGB8Q4qPY`, commit `f54ca9b`).** The whole build succeeded on Vercel (install, blog, /pro, dashboard, plugin). The deploy was then refused:
 
-- 175 functions per deployment;
-- 5 Edge functions declare `regions: ['iad1','lhr1','fra1','sfo1']`, and Hobby allows one region;
-- build time.
+> `exceeded_serverless_functions_per_deployment`: "No more than 12 Serverless Functions can be added to a Deployment on the Hobby plan. Create a team (Pro plan) to deploy more." (https://vercel.link/function-count-limit)
 
-If Vercel rejects the deploy, record the exact error here before changing anything.
+The `gendaiski` team is on Hobby, and the app has 175 functions in `api/`. To host the original app, choose one of these:
+
+| Option | Cost | What you get |
+|---|---|---|
+| (a) Upgrade the team to Vercel Pro, then redeploy the same settings | Paid | The upstream hosting model. Data still needs Upstash and seeders |
+| (b) Run the Docker stack on a server with `./scripts/install-worldmonitor.sh` | VPS cost | The same original interface served by nginx, with its own API, Redis, relay, seeders and AI Port (full data) |
+| (c) Engineering: route `api/` through a handful of catch-all functions to fit Hobby | — | Not attempted; a large change to upstream's routing |
 
 **Data.** The frontend calls `/api/*` on its own origin (`src/services/runtime.ts`: no `VITE_WS_API_URL`, and the host is not worldmonitor.app). That means the fork's own functions answer, not worldmonitor.app's. Upstream's API accepts only its own origins (`api/_cors.js`) or a paid `X-WorldMonitor-Key`, so it cannot be borrowed.
 
