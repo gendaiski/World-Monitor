@@ -609,6 +609,23 @@ Tasks marked **OWNER** need the repository or Vercel owner; an agent cannot do t
 - Follow AGENTS.md: shared cache helpers, every request-varying parameter in cache keys.
 - *Done when:* the panel shows headlines with sources and timestamps, with tests for the function.
 
+**T7b — Clear the Security Audit failures (red since late October, independent of fork changes).**
+
+New advisories were published after the fork was imported:
+
+| Lockfile | Advisories |
+|---|---|
+| `package-lock.json` (root) | dompurify GHSA-cg2g-xh64-v4q7 (critical) and GHSA-mrv2-3pqr-j5jr; zod GHSA-mrhx-c7xc-m3w5; shell-quote GHSA-pqg4-j6r4-53mv (critical); sharp GHSA-wq5f-xc86-pv6w |
+| `scripts/package-lock.json` | undici GHSA-2m5v-pch6-74hx, GHSA-4w7w-5xrc-9h26, GHSA-qrxm-fqhp-jwvm, GHSA-xjj6-f33q-929c |
+| `consumer-prices-core/package-lock.json` | zod |
+| `blog-site/package-lock.json` | undici, vite GHSA-587h-7wmj-h5pm, zod, sharp |
+| `pro-test/package-lock.json` | vite, shell-quote |
+
+The `audit-rust` job also failed; read its log for the advisory. The other lockfiles pass, including `deploy/vercel-hobby`, `ai-port` and `apps/situation-map`.
+
+- **Fix:** an upstream sync (T8) brings upstream's patched lockfiles. Otherwise bump the affected packages per lockfile with `npm update <pkg>` or overrides, then rerun `node .github/scripts/audit-production-dependencies.mjs --workspace <dir> --package-json <dir>/package.json --lockfile <dir>/package-lock.json` and the builds.
+- *Done when:* the Security Audit workflow is green on `main`.
+
 **T8 — Optional: sync upstream** (section 11).
 
 - *Done when:* `main` contains the new upstream commits, and the fork guard test, AI Port tests and situation map tests pass, plus a green CI run.
