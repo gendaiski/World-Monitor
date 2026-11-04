@@ -435,7 +435,25 @@ The `gendaiski` team is on Hobby, and the app has 175 functions in `api/`. To ho
 |---|---|---|
 | (a) Upgrade the team to Vercel Pro, then redeploy the same settings | Paid | The upstream hosting model. Data still needs Upstash and seeders |
 | (b) Run the Docker stack on a server with `./scripts/install-worldmonitor.sh` | VPS cost | The same original interface served by nginx, with its own API, Redis, relay, seeders and AI Port (full data) |
-| (c) Engineering: route `api/` through a handful of catch-all functions to fit Hobby | — | Not attempted; a large change to upstream's routing |
+| (c) Engineering: route `api/` through fewer functions to fit Hobby | Free | **Chosen and built**: `deploy/vercel-hobby` (below) |
+
+**Hobby deploy: `deploy/vercel-hobby` (one function).** Its [README](deploy/vercel-hobby/README.md) has the details. The Vercel project `world-monitor` now has Root Directory `deploy/vercel-hobby`. `build.mjs` writes the Build Output API:
+
+- `static/` is the root `dist/`.
+- One Node function (`functions/api/wm.func`) starts the Docker image's API sidecar on a loopback port and proxies `/api/*` to it with `docker/nginx.conf`'s `/api/` rules. Those rules are: `/api/local-*` gets 403, `Origin: http://localhost`, the per-instance `X-WorldMonitor-Local-Token`, and the `rss-proxy` sandbox headers.
+- `config.json` carries the root `vercel.json` routing, translated by `@vercel/routing-utils` (261 routes).
+
+Verified locally with `redis-server` behind `docker/redis-rest-proxy.mjs`, using the real build output served by a stand-in for Vercel routing:
+
+- `/api/wm-session`, `/api/bootstrap`, news, conflict, military, maritime, natural and wildfire routes all return 200.
+- The original dashboard renders.
+- The routes still returning 503 need the relay, seeded data, or hosts the sandbox blocks.
+
+**Redis is required.** The app's rate limiter fails closed without it (`/api/wm-session` → 503), so the browser cannot get a session.
+
+- Connect Upstash Redis to the `world-monitor` project: Vercel → Storage → Create Database → Upstash for Redis (free tier) → connect to `world-monitor`, then redeploy.
+- The function reads Upstash's `KV_REST_API_URL`/`KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`.
+- If `WM_SESSION_SECRET` is unset, the function creates the session secret once in that Redis (`SET NX` on `wm:vercel-hobby:session-secret`), so it never has to be handled elsewhere.
 
 **Data.** The frontend calls `/api/*` on its own origin (`src/services/runtime.ts`: no `VITE_WS_API_URL`, and the host is not worldmonitor.app). That means the fork's own functions answer, not worldmonitor.app's. Upstream's API accepts only its own origins (`api/_cors.js`) or a paid `X-WorldMonitor-Key`, so it cannot be borrowed.
 
