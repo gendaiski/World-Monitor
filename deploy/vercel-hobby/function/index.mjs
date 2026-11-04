@@ -28,9 +28,34 @@ process.env.UPSTASH_REDIS_REST_TOKEN ||= process.env.KV_REST_API_TOKEN || '';
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-connection']);
 const RSS_SANDBOX_CSP = "sandbox; default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
+// wm-session tokens are signed with WM_SESSION_SECRET, and every instance must
+// use the same one. When the project does not set it, create it once in the
+// deployment's own Redis (SET NX) so it exists only there, then read it back.
+async function ensureSessionSecret() {
+  if (process.env.WM_SESSION_SECRET) return;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+  const key = 'wm:vercel-hobby:session-secret';
+  const call = async (command) => {
+    const response = await fetch(url.replace(/\/+$/, ''), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-vercel-hobby/1.0' },
+      body: JSON.stringify(command),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) throw new Error(`Redis answered HTTP ${response.status}`);
+    return (await response.json()).result;
+  };
+  await call(['SET', key, randomBytes(32).toString('hex'), 'NX']);
+  const secret = await call(['GET', key]);
+  if (typeof secret === 'string' && secret.length >= 32) process.env.WM_SESSION_SECRET = secret;
+}
+
 let sidecarPort = null;
 function startSidecar() {
   sidecarPort ??= (async () => {
+    await ensureSessionSecret();
     const { createLocalApiServer } = await import(pathToFileURL(join(WM, 'local-api-server.mjs')).href);
     const app = await createLocalApiServer({
       mode: 'docker',
