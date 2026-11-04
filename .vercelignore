@@ -6,7 +6,10 @@ src-tauri/target/
 src-tauri/bundle/
 
 # Sidecar and bundled node binaries
-src-tauri/sidecar/
+src-tauri/sidecar/*
+# deploy/vercel-hobby runs the Node API sidecar as its one function.
+!src-tauri/sidecar/local-api-server.mjs
+!src-tauri/sidecar/package.json
 src-tauri/**/node
 
 # macOS disk images and app bundles
