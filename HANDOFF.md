@@ -136,13 +136,18 @@ You are continuing work on github.com/gendaiski/World-Monitor (a fork of koala73
 
 - **Team:** `gendaiski`, id `team_6EOWs9KFetQQNpHUN2XlEuXK`.
 - **Project:** `world-monitor`, id `prj_5pNEqelJPOCAzdgbFNzcFBzoOqh3` (Vite, Output `dist`, Node 24.x, repository root).
-- **First deployment:** `dpl_FWgeb6FjvMmJVKyPjJmcGB8Q4qPY`, built from `f54ca9b`.
+- **Live deployment (Hobby, one function):** `dpl_GYBjGqWzsfcsEUoyuimUhRz32RmW`, built from `d3001cf`, Root Directory `deploy/vercel-hobby`. READY 2026-11-04.
+  - `/dashboard` serves the original app.
+  - `/api/sidecar-health` returns `{"status":"ok","mode":"docker"}`, and the sidecar loaded 175 routes.
+  - Data calls need Redis (T0).
+- **Earlier attempt:** `dpl_FWgeb6FjvMmJVKyPjJmcGB8Q4qPY` (repository root, `f54ca9b`) was refused by the Hobby limit of 12 functions.
 
 | What | URL |
 |---|---|
+| **Live site (original interface)** | https://world-monitor-rho-snowy.vercel.app |
 | Production alias | https://world-monitor-gendaiski.vercel.app |
 | Alias (git main) | https://world-monitor-git-main-gendaiski.vercel.app |
-| First deployment URL | https://world-monitor-fkd2vkqdr-gendaiski.vercel.app |
+| Live deployment URL | https://world-monitor-c917z3b7a-gendaiski.vercel.app |
 | Project dashboard | https://vercel.com/gendaiski/world-monitor |
 | Settings: Git (connect for auto-deploys) | https://vercel.com/gendaiski/world-monitor/settings/git |
 | Settings: Environment Variables (Redis, keys) | https://vercel.com/gendaiski/world-monitor/settings/environment-variables |
@@ -273,7 +278,7 @@ The streams are the `NEWS` and `CAMS` lists in `apps/situation-map/index.html`, 
 | World Monitor (upstream app, imported whole) | In the repo, unchanged except fork wiring | Docker host via `./scripts/install-worldmonitor.sh` |
 | AI Port (connect any AI by API key or subscription) | Done, 16 tests passing, CI workflow `ai-port.yml` | Docker service `ai-port` on 127.0.0.1:8787 |
 | One-command installer | Done | Any Docker host |
-| **Original World Monitor web app (the real worldmonitor.app interface)** | Builds on the fork with `npm run build:fork`, and the Vercel build succeeds. **The deploy is refused on the Hobby plan** (175 functions > 12); needs Pro or the Docker host, see section 5a and task T0 | Vercel project `world-monitor` (Pro), or any Docker host |
+| **Original World Monitor web app (the real worldmonitor.app interface)** | **Live on Vercel Hobby** through `deploy/vercel-hobby` (one function): https://world-monitor-rho-snowy.vercel.app. Data needs Redis connected (T0) | Vercel project `world-monitor` |
 | Situation map (standalone lookalike, superseded by the original app) | Done and pushed (`3159050`). Vercel still serves the older design | Vercel project `world-monitor-situation-map`; also the Claude artifact |
 | Fork CI | Green; upstream-only operations jobs skip on the fork | GitHub Actions |
 | Dependabot | Removed on the fork | — |
