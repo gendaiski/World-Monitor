@@ -1,0 +1,20 @@
+{
+  "name": "worldmonitor-vercel-hobby",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@upstash/ratelimit": "2.0.8",
+    "@upstash/redis": "1.37.0",
+    "convex": "1.34.0"
+  },
+  "devDependencies": {
+    "@vercel/routing-utils": "6.6.1"
+  },
+  "overrides": {
+    "esbuild": "0.28.1",
+    "ws": "8.21.0"
+  }
+}
