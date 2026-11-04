@@ -20,6 +20,10 @@ process.env.LOCAL_API_MODE = 'docker';
 process.env.LOCAL_API_CLOUD_FALLBACK = 'false';
 process.env.LOCAL_API_RESOURCE_DIR = WM;
 process.env.LOCAL_API_TOKEN ||= randomBytes(32).toString('base64url');
+// Vercel's Upstash integration names its variables KV_REST_API_*; the app
+// reads UPSTASH_REDIS_REST_*.
+process.env.UPSTASH_REDIS_REST_URL ||= process.env.KV_REST_API_URL || '';
+process.env.UPSTASH_REDIS_REST_TOKEN ||= process.env.KV_REST_API_TOKEN || '';
 
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-connection']);
 const RSS_SANDBOX_CSP = "sandbox; default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
