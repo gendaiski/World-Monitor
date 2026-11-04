@@ -61,13 +61,27 @@ writeFileSync(join(func, '.vc-config.json'), JSON.stringify({
   maxDuration: 60,
 }, null, 2));
 
-const rootConfig = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8'));
+// On Vercel the checked-out root vercel.json can lack its routing keys when
+// the project's Root Directory is this folder, so read the committed file
+// from git and fall back to the working tree.
+const hasRouting = (config) => Boolean(config && (config.redirects || config.rewrites || config.headers));
+let rootConfig = null;
+try {
+  rootConfig = JSON.parse(execSync('git show HEAD:vercel.json', { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }));
+} catch (gitError) {
+  console.warn(`[vercel-hobby] git show HEAD:vercel.json failed (${gitError.message}); using the working tree copy`);
+}
+if (!hasRouting(rootConfig)) rootConfig = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8'));
+if (!hasRouting(rootConfig)) {
+  throw new Error(`root vercel.json has no redirects, rewrites or headers (keys: ${Object.keys(rootConfig).join(', ')})`);
+}
 const { routes, error } = getTransformedRoutes({
   redirects: rootConfig.redirects,
   rewrites: rootConfig.rewrites,
   headers: rootConfig.headers,
 });
 if (error) throw new Error(`vercel.json routing could not be translated: ${error.message}`);
+if (!Array.isArray(routes)) throw new Error('vercel.json routing translated to no routes');
 routes.push({ src: '^/api(?:/(.*))?$', dest: '/api/wm?__wm_path=/api/$1' });
 writeFileSync(join(out, 'config.json'), JSON.stringify({ version: 3, routes }, null, 2));
 
